@@ -65,3 +65,16 @@ def test_dashboard_shows_database_stats(clean_db, tone_wav):
     at = _run("views/dashboard.py")
     html = " ".join(m.value for m in at.markdown)
     assert "Recordings analysed" in html and "Budget review" in html
+
+
+def test_delete_requires_typed_confirmation(clean_db, tone_wav):
+    """Clicking delete opens a confirmation dialog; nothing is deleted and the confirm button stays
+    disabled until the phrase is typed. (Typing inside a dialog is a fragment rerun in the browser,
+    which AppTest cannot simulate; deletion itself is covered by storage-service tests.)"""
+    rid = _seed(tone_wav, "To delete")
+    at = _run("views/settings.py")
+    next(b for b in at.button if b.label == "Delete recording").click().run()
+    assert repository.get_recording(rid) is not None
+    confirm = next(b for b in at.button if b.label == "Delete permanently")
+    assert confirm.disabled
+    assert any(t.label.startswith("Type DELETE") for t in at.text_input)

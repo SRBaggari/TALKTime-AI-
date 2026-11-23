@@ -183,26 +183,88 @@ with tabs[5]:
             st.error(r["reason"])
 
 # ---------------------------------------------------------------- privacy
+@st.dialog("Confirm permanent deletion")
+def confirm_delete(action: str, rid: str | None, title: str) -> None:
+    texts = {
+        "recording": "the recording, its transcript, speakers, analytics, original and processed audio, and all reports",
+        "analysis": "the transcript, speakers, analytics and reports (the audio is kept so it can be re-analysed)",
+        "reports": "all generated report files (PDF) for this recording",
+        "original": "the original uploaded file (the processed audio used for playback is kept)",
+        "all": "EVERY recording, transcript, analysis and report stored by TalkTime AI",
+    }
+    st.markdown(f"This permanently deletes **{texts[action]}**" + (f" for **{title}**." if rid else "."))
+    st.caption("Deleted data cannot be recovered.")
+    phrase = "DELETE ALL" if action == "all" else "DELETE"
+    typed = st.text_input(f"Type {phrase} to confirm")
+    c1, c2 = st.columns(2)
+    if c1.button("Cancel", width="stretch"):
+        st.rerun()
+    if c2.button("Delete permanently", type="primary", width="stretch", disabled=typed != phrase):
+        if action == "recording":
+            storage_service.delete_recording(rid)
+        elif action == "analysis":
+            storage_service.delete_transcripts_and_analysis(rid)
+        elif action == "reports":
+            storage_service.delete_reports(rid)
+        elif action == "original":
+            storage_service.delete_original_audio(rid)
+        elif action == "all":
+            storage_service.delete_all_data()
+        if action in ("recording", "analysis", "all"):
+            if action == "all" or st.session_state.get("current_recording") == rid:
+                st.session_state.pop("current_recording", None)
+            st.session_state.pop("active_job", None)
+            st.session_state.pop("seek", None)
+        st.session_state.privacy_msg = "Deleted."
+        st.rerun()
+
+
 with tabs[6]:
-    section("Delete a recording", "Removes the database records, the original upload, processed audio and generated reports.")
+    st.markdown(badge("Local processing only", "ok") + " &nbsp; " + badge("No telemetry", "ok") + " &nbsp; " +
+                badge("No cloud services", "ok"), unsafe_allow_html=True)
+    st.caption("Audio is decoded, transcribed, diarized and analysed on this computer. Optional Ollama summaries are "
+               "restricted to localhost. Nothing is uploaded anywhere.")
+    if st.session_state.pop("privacy_msg", None):
+        st.success("Deleted.", icon=":material/delete:")
+
+    section("Credentials")
+    token = config.get_hf_token()
+    c1, c2 = st.columns([3, 1], vertical_alignment="center")
+    c1.markdown(f"Hugging Face token: `{config.mask_token(token)}`  \n"
+                "Stored only in the local, git-ignored `.env` file. It is needed once to download the diarization "
+                "model; analysis never uses it.")
+    from core.diarization_engine import is_diarization_available
+
+    if token and c2.button("Remove token", width="stretch", disabled=not is_diarization_available(),
+                           help="Available once the diarization model is downloaded."):
+        removed = config.remove_hf_token_from_env_file()
+        st.success("Token removed from .env." if removed else "Token was not found in .env (it may be set as a system "
+                   "environment variable instead).")
+
+    section("Manage a recording")
     recs = repository.list_recordings()
     if recs:
-        c1, c2 = st.columns([4, 1])
-        target = c1.selectbox("Recording", [r["id"] for r in recs], label_visibility="collapsed",
-                              format_func=lambda i: next(f"{r['title']} · {r['status']} · {r['created_at']:%d %b %Y %H:%M}" for r in recs if r["id"] == i))
-        if c2.button("Delete", type="primary", width="stretch", disabled=JobManager.active() == target):
-            storage_service.delete_recording(target)
-            if st.session_state.get("current_recording") == target:
-                st.session_state.pop("current_recording")
-            st.session_state.pop("active_job", None)
-            st.toast("Recording deleted")
-            st.rerun()
+        target = st.selectbox("Recording", [r["id"] for r in recs], key="privacy_rec",
+                              format_func=lambda i: next(f"{r['title']} · {r['status']} · {r['created_at']:%d %b %Y %H:%M}"
+                                                         for r in recs if r["id"] == i))
+        rec = next(r for r in recs if r["id"] == target)
+        busy = JobManager.active() == target
+        n_reports = len(repository.list_reports(target))
+        c1, c2, c3, c4 = st.columns(4)
+        if c1.button("Delete recording", type="primary", width="stretch", disabled=busy, icon=":material/delete_forever:"):
+            confirm_delete("recording", target, rec["title"])
+        if c2.button("Delete transcript & analysis", width="stretch", disabled=busy or rec["status"] != "completed"):
+            confirm_delete("analysis", target, rec["title"])
+        if c3.button(f"Delete reports ({n_reports})", width="stretch", disabled=busy or not n_reports):
+            confirm_delete("reports", target, rec["title"])
+        if c4.button("Delete original upload", width="stretch", disabled=busy or not rec["stored_path"]):
+            confirm_delete("original", target, rec["title"])
+        if busy:
+            st.caption("This recording is being analysed; deletion is available when it finishes.")
     else:
         st.caption("No recordings stored.")
-    section("Delete all local analysis data", "Permanently removes every recording, transcript, analysis and report. Settings and models are kept.")
-    confirm = st.text_input("Type DELETE to confirm")
-    if st.button("Delete all data", disabled=confirm != "DELETE" or bool(JobManager.active())):
-        n = storage_service.delete_all_data()
-        st.session_state.pop("current_recording", None)
-        st.session_state.pop("active_job", None)
-        st.success(f"All analysis data deleted ({n} files removed).")
+
+    section("Delete all local analysis data", "Removes every recording, transcript, analysis and report. "
+            "Settings and downloaded models are kept.")
+    if st.button("Delete all data…", disabled=bool(JobManager.active()) or not recs, icon=":material/warning:"):
+        confirm_delete("all", None, "")
