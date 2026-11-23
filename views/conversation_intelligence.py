@@ -42,6 +42,13 @@ def insight_list(items, empty="None detected.", extra=None):
                     unsafe_allow_html=True)
 
 
+fs = (m.get("language") or {}).get("feature_support") or {}
+if fs and not all(fs.values()):
+    st.info(f"Detected language: {(m.get('language') or {}).get('detected_name', '?')}. Sentiment, spaCy topics and English "
+            "phrase rules (decisions, action items) are English-only and are switched off for this recording instead of "
+            "giving unreliable results. Keyword topics, '?'-based questions and all audio measurements are available.",
+            icon=":material/translate:")
+
 tabs = st.tabs(["Summary", "Topics & key points", "Questions", "Overlaps", "Silence", "Sentiment", "Decisions & actions", "Participation"])
 
 # ---------------------------------------------------------------- summary
@@ -96,6 +103,30 @@ with tabs[1]:
         st.plotly_chart(style_fig(fig, 60 + 34 * len(topics), legend=False), width="stretch", theme=None, config=PLOTLY_CONFIG)
     else:
         st.caption("Not enough repeated content to identify topics (or the language is not English).")
+    rec_topics = m.get("topic_recurrence") or []
+    if rec_topics:
+        section("Repeated discussion topics", "Mentions closer than 60 s form one discussion episode; a topic with "
+                "2+ episodes was returned to later. Matched on transcript text.", tag="measured")
+        revisited = [t for t in rec_topics if t["revisited"]]
+        if not revisited:
+            st.caption("No topic was returned to after a break of more than 60 seconds.")
+        fig = go.Figure()
+        for row, t in enumerate(rec_topics):
+            for ep in t["episodes"]:
+                fig.add_bar(y=[t["topic"]], x=[max(ep["end"] - ep["start"], 1.0)], base=[ep["start"]], orientation="h",
+                            marker=dict(color="#9085E9" if t["revisited"] else "#475569"), showlegend=False,
+                            customdata=[[format_timestamp(ep["start"]), ep["mentions"],
+                                         ", ".join(N(x) for x in ep["speakers"])]],
+                            hovertemplate="<b>%{y}</b><br>from %{customdata[0]} · %{customdata[1]} mention(s)"
+                                          "<br>%{customdata[2]}<extra></extra>")
+        dur = data["recording"]["duration"] or 1
+        tv = [dur * k / 6 for k in range(7)]
+        fig.update_layout(barmode="overlay")
+        fig.update_xaxes(range=[0, dur], tickvals=tv, ticktext=[format_timestamp(x) for x in tv])
+        fig.update_yaxes(autorange="reversed")
+        st.plotly_chart(style_fig(fig, 60 + 32 * len(rec_topics), legend=False), width="stretch", theme=None,
+                        config=PLOTLY_CONFIG)
+        st.caption("Violet = topic revisited in separate episodes · grey = discussed in one stretch.")
     section("Key points", "Extractive: sentences with the highest density of topic terms and emphasis cues.", tag="inferred")
     insight_list([dict(k, confidence=min(0.9, 0.4 + k.get("score", 0) / 20)) for k in m.get("key_points", [])])
 
