@@ -26,6 +26,20 @@ def _fake_diarization(*a, **k):
     return [SpeakerSegment(0, 2, "Speaker 1"), SpeakerSegment(3, 5, "Speaker 2")]
 
 
+_real_detect_speech = svc.detect_speech
+
+
+@pytest.fixture(autouse=True)
+def energy_vad():
+    """Synthetic tones are (correctly) not speech to Silero; use the deterministic energy VAD
+    so pipeline plumbing can be tested. Real Silero behaviour is tested separately."""
+    def fake(audio, sr, **kw):
+        kw.pop("method", None)
+        return _real_detect_speech(audio, sr, method="energy", **kw)
+    with mock.patch.object(svc, "detect_speech", fake):
+        yield
+
+
 @pytest.fixture
 def mocked_engines():
     with mock.patch.object(svc.TranscriptionEngine, "transcribe", _fake_transcription), \
@@ -123,3 +137,50 @@ def test_job_manager_runs_in_background(clean_db, tone_wav, mocked_engines):
             break
         time.sleep(0.05)
     assert svc.JobManager.status(rid)["state"] == "completed"
+
+
+def test_vad_skips_models_when_no_speech(clean_db, tone_wav):
+    """Real Silero VAD: pure tones contain no speech, so expensive models must not run."""
+    rid = _recording(tone_wav)
+    transcribe = mock.Mock()
+    with mock.patch.object(svc, "detect_speech", _real_detect_speech),          mock.patch.object(svc.TranscriptionEngine, "transcribe", transcribe):
+        with pytest.raises(svc.AnalysisError, match="No speech detected by voice activity detection"):
+            svc.run_analysis(rid, svc.AnalysisOptions())
+    transcribe.assert_not_called()
+    rec = repository.get_recording(rid)
+    assert rec["model_info"]["failed_stage"] == "vad" and "Audio Quality" in rec["model_info"]["hint"]
+
+
+def test_pipeline_records_quality_vad_language_and_performance(clean_db, tone_wav, mocked_engines):
+    rid = _recording(tone_wav)
+    m = svc.run_analysis(rid, svc.AnalysisOptions(multilingual=True))
+    assert m["quality"]["score"] is not None and m["quality"]["format"]["sample_rate"] == 16000
+    assert m["vad"]["method"] == "energy" and "comparison" in m["vad"]
+    assert m["language"]["detected"] == "en" and m["language"]["feature_support"]["sentiment"]
+    perf = m["processing"]
+    assert set(perf["stages"]) >= {"decode", "vad", "quality", "transcription", "diarization", "analytics"}
+    assert perf["resources"]["available"] and perf["resources"]["peak_rss_mb"] > 0
+    assert perf["audio_duration"] == pytest.approx(6.0, abs=0.01)
+    assert all("acoustic" in x for x in m["silence"]["silences"])
+    assert "per_speaker" in m["alignment"] and "Speaker 1" in m["alignment"]["per_speaker"]
+    assert m["participation"]["gini"] is not None and m["participation"]["dominance_indicators"]
+
+
+def test_failure_records_stage_and_recovery_hint(clean_db, tone_wav):
+    rid = _recording(tone_wav)
+    with mock.patch.object(svc.TranscriptionEngine, "transcribe", side_effect=MemoryError()):
+        with pytest.raises(MemoryError):
+            svc.run_analysis(rid, svc.AnalysisOptions())
+    info = repository.get_recording(rid)["model_info"]
+    assert info["failed_stage"] == "transcription" and "memory" in info["hint"].lower()
+    assert "decode" in info["stages"]
+
+
+def test_recompute_keeps_quality_language_and_reclassifies_silence(clean_db, tone_wav, mocked_engines):
+    rid = _recording(tone_wav)
+    first = svc.run_analysis(rid, svc.AnalysisOptions())
+    m = svc.reassign_segment(rid, 1, "Speaker 1")
+    assert m["quality"] == first["quality"]
+    assert m["language"]["top_probabilities"] == first["language"]["top_probabilities"]
+    assert m["processing"]["total_seconds"] == first["processing"]["total_seconds"]
+    assert all("acoustic" in x for x in m["silence"]["silences"])
