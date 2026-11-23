@@ -57,16 +57,19 @@ WHISPER_REPO_TEMPLATE = "Systran/faster-whisper-{size}"
 WHISPER_SIZES = ["tiny", "base", "small", "medium"]
 SPACY_MODEL = "en_core_web_sm"
 
-# Speaker colours (green, purple, blue first as per design spec)
+# Speaker colours — validated categorical order for the dark surface (#111827):
+# lightness band, chroma floor, colour-vision-deficiency separation and contrast
+# all pass. Blue and violet cannot be adjacent (ΔE 1.9 for protanopia), so blue
+# is slot 4. Speakers are always also labelled by name (never colour alone).
 SPEAKER_COLORS = [
-    "#34D399",  # emerald
-    "#A78BFA",  # violet
-    "#60A5FA",  # blue
-    "#FBBF24",  # amber
-    "#F472B6",  # pink
-    "#2DD4BF",  # teal
-    "#FB923C",  # orange
-    "#94A3B8",  # slate
+    "#199E70",  # green
+    "#9085E9",  # violet
+    "#D95926",  # orange
+    "#3987E5",  # blue
+    "#C98500",  # amber
+    "#D55181",  # magenta
+    "#0CA30C",  # leaf green
+    "#E66767",  # red
 ]
 
 
