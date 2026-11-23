@@ -47,13 +47,13 @@ def job_monitor(recording_id: str) -> None:
             st.success(f"Finished in {format_duration(elapsed)} "
                        f"({format_duration(rec['duration'])} of audio, {rec['num_speakers']} speaker(s) detected).")
             c1, c2, c3 = st.columns(3)
-            if c1.button("Speaker analysis", type="primary", use_container_width=True, icon=":material/record_voice_over:"):
+            if c1.button("Speaker analysis", type="primary", width="stretch", icon=":material/record_voice_over:"):
                 st.session_state.current_recording = recording_id
                 st.switch_page("pages/speaker_analysis.py")
-            if c2.button("Timeline & transcript", use_container_width=True, icon=":material/view_timeline:"):
+            if c2.button("Timeline & transcript", width="stretch", icon=":material/view_timeline:"):
                 st.session_state.current_recording = recording_id
                 st.switch_page("pages/conversation_timeline.py")
-            if c3.button("Analyse another", use_container_width=True, icon=":material/add:"):
+            if c3.button("Analyse another", width="stretch", icon=":material/add:"):
                 st.session_state.pop("active_job", None)
                 st.rerun(scope="app")
         else:
@@ -63,13 +63,13 @@ def job_monitor(recording_id: str) -> None:
             else:
                 st.write(job["error"])
             c1, c2 = st.columns(2)
-            if c1.button("Retry analysis", type="primary", use_container_width=True, icon=":material/refresh:"):
+            if c1.button("Retry analysis", type="primary", width="stretch", icon=":material/refresh:"):
                 try:
                     JobManager.start(recording_id, st.session_state.get("job_options", AnalysisOptions(settings=s)))
                 except AnalysisError as exc:
                     st.warning(str(exc))
                 st.rerun(scope="fragment")
-            if c2.button("Discard recording", use_container_width=True, icon=":material/delete:"):
+            if c2.button("Discard recording", width="stretch", icon=":material/delete:"):
                 storage_service.delete_recording(recording_id)
                 st.session_state.pop("active_job", None)
                 st.rerun(scope="app")
@@ -185,7 +185,7 @@ if failed:
             c1, c2, c3 = st.columns([4, 1, 1])
             c1.markdown(f"**{r['title']}**")
             c1.caption((r["error"] or "Unknown error").splitlines()[0][:200])
-            if c2.button("Retry", key=f"retry_{r['id']}", use_container_width=True, disabled=not r["stored_path"]):
+            if c2.button("Retry", key=f"retry_{r['id']}", width="stretch", disabled=not r["stored_path"]):
                 try:
                     opts = AnalysisOptions(diarization_mode=r["diarization_mode"] if diar_ok else "single", settings=s)
                     JobManager.start(r["id"], opts)
@@ -194,6 +194,6 @@ if failed:
                     st.rerun()
                 except AnalysisError as exc:
                     st.warning(str(exc))
-            if c3.button("Delete", key=f"del_{r['id']}", use_container_width=True):
+            if c3.button("Delete", key=f"del_{r['id']}", width="stretch"):
                 storage_service.delete_recording(r["id"])
                 st.rerun()

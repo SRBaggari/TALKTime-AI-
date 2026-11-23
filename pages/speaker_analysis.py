@@ -64,7 +64,7 @@ for i in range(0, len(labels), per_row):
             b.markdown(f'<div class="tt-metric-label">Last spoke</div><b>{format_timestamp(st_["last_spoke"])}</b>', unsafe_allow_html=True)
             with st.form(f"rename_{rid}_{label}", border=False):
                 new = st.text_input("Display name", value=names[label], max_chars=100, key=f"name_{rid}_{label}")
-                if st.form_submit_button("Save name", use_container_width=True):
+                if st.form_submit_button("Save name", width="stretch"):
                     repository.rename_speaker(rid, label, new)
                     st.toast(f"Renamed {label} to {new.strip() or label}")
                     st.rerun()
@@ -84,7 +84,7 @@ with left:
                            hovertemplate="<b>%{label}</b><br>%{value:.1f}s · %{percent}<extra></extra>"))
     fig.add_annotation(text=f"<b>{format_duration(summary.get('combined_speaker_time'))}</b><br><span style='font-size:11px;color:#94A3B8'>combined</span>",
                        showarrow=False, font=dict(size=17, color="#F1F5F9"))
-    st.plotly_chart(style_fig(fig, 320), use_container_width=True, config=PLOTLY_CONFIG)
+    st.plotly_chart(style_fig(fig, 320), width="stretch", theme=None, config=PLOTLY_CONFIG)
 with right:
     section("Speaking time and solo vs overlapping", tag="measured")
     fig = go.Figure()
@@ -96,14 +96,14 @@ with right:
     fig.update_layout(barmode="stack", bargap=0.45)
     fig.update_xaxes(title="seconds")
     fig.update_yaxes(autorange="reversed")
-    st.plotly_chart(style_fig(fig, 320), use_container_width=True, config=PLOTLY_CONFIG)
+    st.plotly_chart(style_fig(fig, 320), width="stretch", theme=None, config=PLOTLY_CONFIG)
 
 left, right = st.columns(2, gap="large")
 with left:
     section("Turns per speaker", tag="measured")
     fig = go.Figure(go.Bar(x=disp, y=[speakers[l]["num_turns"] for l in labels], marker=dict(color=cols, cornerradius=4),
                            hovertemplate="<b>%{x}</b><br>%{y} turns<extra></extra>"))
-    st.plotly_chart(style_fig(fig, 280, legend=False), use_container_width=True, config=PLOTLY_CONFIG)
+    st.plotly_chart(style_fig(fig, 280, legend=False), width="stretch", theme=None, config=PLOTLY_CONFIG)
 with right:
     section("Turn length distribution", tag="measured")
     turns = pd.DataFrame(sp.get("turns", []))
@@ -114,7 +114,7 @@ with right:
                     boxpoints="all", jitter=0.4, pointpos=0, fillcolor="rgba(0,0,0,0)",
                     hovertemplate="%{x:.1f}s<extra>" + escape(names[l]) + "</extra>")
     fig.update_xaxes(title="turn length (seconds)")
-    st.plotly_chart(style_fig(fig, 280, legend=False), use_container_width=True, config=PLOTLY_CONFIG)
+    st.plotly_chart(style_fig(fig, 280, legend=False), width="stretch", theme=None, config=PLOTLY_CONFIG)
 
 # ---------------------------------------------------------------- participation
 section("Participation balance", part.get("method", ""), tag="measured")
@@ -143,7 +143,7 @@ table = pd.DataFrame([{
     "Overlap": format_duration(s["overlap_time"]), "Possible interruptions made": s["interruptions_initiated"],
     "Possible interruptions received": s["interruptions_received"],
 } for l, s in speakers.items()])
-st.dataframe(table, hide_index=True, use_container_width=True)
+st.dataframe(table, hide_index=True, width="stretch")
 
 # ---------------------------------------------------------------- corrections
 with st.expander("Correct speaker detection", icon=":material/merge:"):
@@ -156,7 +156,7 @@ with st.expander("Correct speaker detection", icon=":material/merge:"):
         src = c1.selectbox("Merge this speaker", labels, format_func=lambda l: names[l], key="merge_src")
         dst = c2.selectbox("into", [l for l in labels if l != src], format_func=lambda l: names[l], key="merge_dst")
         c3.write("")
-        if c3.button("Merge", type="primary", use_container_width=True):
+        if c3.button("Merge", type="primary", width="stretch"):
             with st.spinner("Recalculating analytics…"):
                 merge_speakers(rid, src, dst)
             st.toast(f"Merged {names[src]} into {names[dst]}")

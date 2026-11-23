@@ -29,9 +29,9 @@ if stats["recordings"] == 0:
         ],
     )
     c1, c2, _ = st.columns([1, 1, 3])
-    if c1.button("Upload recording", type="primary", icon=":material/upload:", use_container_width=True):
+    if c1.button("Upload recording", type="primary", icon=":material/upload:", width="stretch"):
         st.switch_page("pages/upload_audio.py")
-    if c2.button("Check setup", icon=":material/settings:", use_container_width=True):
+    if c2.button("Check setup", icon=":material/settings:", width="stretch"):
         st.switch_page("pages/settings.py")
     failed = [r for r in recordings if r["status"] == "failed"]
     if failed:
@@ -68,7 +68,7 @@ with left:
         hovertemplate="<b>%{customdata[0]}</b><br>%{x|%d %b %H:%M}<br>Top speaker: %{y:.0f}%<extra></extra>"))
     fig.add_hline(y=50, line=dict(color="#475569", dash="dot", width=1))
     fig.update_yaxes(range=[0, 105], ticksuffix="%")
-    st.plotly_chart(style_fig(fig, 280, legend=False), use_container_width=True, config=PLOTLY_CONFIG)
+    st.plotly_chart(style_fig(fig, 280, legend=False), width="stretch", theme=None, config=PLOTLY_CONFIG)
 with right:
     section("Recording durations", "Length of each analysed recording.", tag="measured")
     fig = go.Figure(go.Bar(
@@ -76,7 +76,7 @@ with right:
         customdata=df[["Recording", "Speakers"]],
         hovertemplate="<b>%{customdata[0]}</b><br>%{y:.1f} min · %{customdata[1]} speakers<extra></extra>"))
     fig.update_yaxes(ticksuffix=" min")
-    st.plotly_chart(style_fig(fig, 280, legend=False), use_container_width=True, config=PLOTLY_CONFIG)
+    st.plotly_chart(style_fig(fig, 280, legend=False), width="stretch", theme=None, config=PLOTLY_CONFIG)
 
 left, right = st.columns([3, 2], gap="large")
 with left:
@@ -88,7 +88,7 @@ with left:
                 f'<div class="tt-row-title">{escape(r["title"])}</div>'
                 f'<div class="tt-row-sub">{r["created_at"]:%d %b %Y %H:%M} · {format_duration(r["duration"])} · '
                 f'{r["num_speakers"]} speakers · {status_badge(r["status"])}</div>', unsafe_allow_html=True)
-            if r["status"] == "completed" and c2.button("Open", key=f"open_{r['id']}", use_container_width=True):
+            if r["status"] == "completed" and c2.button("Open", key=f"open_{r['id']}", width="stretch"):
                 st.session_state.current_recording = r["id"]
                 st.switch_page("pages/speaker_analysis.py")
 with right:
