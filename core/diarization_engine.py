@@ -10,6 +10,7 @@ import gc
 import logging
 import os
 import threading
+import time
 from pathlib import Path
 from typing import Callable
 
@@ -66,6 +67,7 @@ def relabel_by_first_appearance(segments: list[SpeakerSegment]) -> list[SpeakerS
 class DiarizationEngine:
     _lock = threading.Lock()
     _pipeline = None
+    last_load_seconds: float = 0.0
 
     def __init__(self, cpu_threads: int | None = None):
         self.cpu_threads = cpu_threads
@@ -77,7 +79,9 @@ class DiarizationEngine:
     def load(self):
         with self._lock:
             if DiarizationEngine._pipeline is not None:
+                self.last_load_seconds = 0.0
                 return DiarizationEngine._pipeline
+            t0 = time.perf_counter()
             local = local_diarization_path()
             if local is None:
                 raise ModelUnavailableError(SETUP_INSTRUCTIONS)
@@ -94,6 +98,7 @@ class DiarizationEngine:
                 raise ModelUnavailableError(SETUP_INSTRUCTIONS)
             pipeline.to(torch.device("cpu"))
             DiarizationEngine._pipeline = pipeline
+            self.last_load_seconds = time.perf_counter() - t0
             return pipeline
 
     @classmethod
