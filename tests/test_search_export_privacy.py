@@ -209,3 +209,16 @@ def test_resource_monitor_samples_memory():
     assert s["available"] and s["samples"] >= 3 and s["peak_rss_mb"] > 150
     snap = system_snapshot()
     assert snap["memory_total_gb"] > 1 and 0 <= snap["memory_percent"] <= 100
+
+
+def test_pdf_includes_new_sections_without_errors(clean_db, tmp_path):
+    from core.report_generator import generate_pdf
+
+    rid = _store()
+    data = repository.load_analysis(rid)
+    data["metrics"]["vad"] = {"method": "silero", "speech": [[0, 14]], "speech_duration": 14.0, "speech_ratio": 0.2,
+                              "comparison": {"agreement": 0.9, "unattributed_total": 1.0}}
+    data["metrics"]["quality"]["issues"] = [{"severity": "warning", "message": "Low SNR", "recommendation": "Use a headset",
+                                             "key": "low_snr", "penalty": 15}]
+    out = generate_pdf(data, tmp_path / "full.pdf")
+    assert out.read_bytes().startswith(b"%PDF") and out.stat().st_size > 5000

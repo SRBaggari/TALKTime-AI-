@@ -231,6 +231,23 @@ def generate_pdf(data: dict, output_path: Path, include_transcript: bool = True)
     story.append(P(pa.get("method", ""), "small"))
     story.append(P(pa.get("caveat", ""), "small"))
 
+    per = pa.get("per_speaker") or {}
+    if per:
+        story.append(Paragraph("Conversation dynamics", st["h3"]))
+        g, dr = pa.get("gini"), pa.get("dominance_ratio")
+        story.append(P(f"Gini {'—' if g is None else f'{g:.2f}'} · dominance ratio {'—' if dr is None else f'{dr:.2f}x'} · "
+                       f"{pa.get('turns_per_minute', 0):.1f} turns per minute"
+                       + (f" · average response time {pa['avg_response_time']:.1f}s" if pa.get("avg_response_time") is not None else "")))
+        rows = [["Speaker", "Time share", "Turn share", "Turns/min", "Avg response", "Int. balance", "Questions"]]
+        for label, v in per.items():
+            rows.append([names.get(label, label), f"{v['time_share'] * 100:.0f}%", f"{v['turn_share'] * 100:.0f}%",
+                         f"{v['turns_per_minute']:.1f}",
+                         "—" if v["avg_response_time"] is None else f"{v['avg_response_time']:.1f}s",
+                         f"{v['interruption_balance']:+d}", str(v["questions_asked"])])
+        story.append(_table(rows, [32 * mm, 22 * mm, 22 * mm, 20 * mm, 26 * mm, 24 * mm, 22 * mm]))
+        for ind in pa.get("dominance_indicators") or []:
+            story.append(P(f"• {ind['indicator']}: {names.get(ind['speaker'], ind['speaker'])} ({ind['value']})", "small"))
+
     # Sentiment
     se = m.get("sentiment", {})
     story.append(Paragraph("Language sentiment (approximate)", st["h2"]))
@@ -277,9 +294,57 @@ def generate_pdf(data: dict, output_path: Path, include_transcript: bool = True)
         story.append(_table(rows, [16 * mm, 28 * mm, 96 * mm, 40 * mm]))
     story.append(P(qa.get("method", ""), "small"))
 
+    # Audio quality, VAD and language
+    qa_ = m.get("quality") or {}
+    if qa_:
+        story.append(Paragraph("Audio quality", st["h2"]))
+        fmt = qa_.get("format") or {}
+        story.append(P(f"Score {qa_['score']}/100 ({qa_['label']}). Original format: "
+                       f"{fmt.get('sample_rate') or '?'} Hz, {fmt.get('channels') or '?'} channel(s), {fmt.get('codec') or '?'}. "
+                       f"Speech level {qa_['speech_level_dbfs'] if qa_['speech_level_dbfs'] is not None else '—'} dBFS, "
+                       f"noise floor {qa_['noise_floor_dbfs']} dBFS, SNR estimate "
+                       f"{qa_['snr_db'] if qa_['snr_db'] is not None else '—'} dB, {qa_['clipping_events']} clipping events."))
+        for i in qa_.get("issues", []):
+            story.append(P(f"• [{i['severity']}] {i['message']} — {i['recommendation']}", "small"))
+    vad_ = m.get("vad") or {}
+    if vad_:
+        cmp_ = vad_.get("comparison") or {}
+        story.append(P(f"Voice activity ({vad_['method']}): {format_duration(vad_['speech_duration'])} of speech "
+                       f"({vad_['speech_ratio'] * 100:.0f}% of the recording); agreement with diarized speech "
+                       f"{cmp_.get('agreement', 0) * 100:.0f}%; {format_duration(cmp_.get('unattributed_total'))} of speech "
+                       "was not assigned to any speaker.", "small"))
+    lang_ = m.get("language") or {}
+    if lang_:
+        story.append(Paragraph("Language", st["h2"]))
+        tp = ", ".join(f"{c} {p_ * 100:.0f}%" for c, p_ in (lang_.get("top_probabilities") or [])[:3])
+        mix = ", ".join(f"{k} {v * 100:.0f}%" for k, v in (lang_.get("script_mix") or {}).items())
+        story.append(P(f"Detected: {lang_.get('detected_name')} ({tp or 'no probabilities stored'}). "
+                       f"Scripts in transcript: {mix or '—'}. Code-switching: {'yes' if lang_.get('code_switching') else 'no'}."))
+        off = [k for k, v in (lang_.get("feature_support") or {}).items() if not v]
+        if off:
+            story.append(P("English-only analyses switched off for this language: " + ", ".join(k.replace("_", " ") for k in off) + ".", "small"))
+
+    # Processing performance
+    pr = m.get("processing") or {}
+    if pr:
+        story.append(Paragraph("Processing", st["h2"]))
+        res = pr.get("resources") or {}
+        stages = ", ".join(f"{k} {v:.1f}s" for k, v in (pr.get("stages") or {}).items())
+        line = (f"Processed {format_duration(pr.get('audio_duration'))} of audio in {format_duration(pr['total_seconds'])}"
+                + (f" (real-time factor {pr['realtime_factor']:.2f})" if pr.get("realtime_factor") else "") + f". Stages: {stages}.")
+        if res.get("available"):
+            line += f" Peak memory {res['peak_rss_mb']:.0f} MB"
+            if res.get("mean_cpu_percent") is not None:
+                line += f", mean CPU {res['mean_cpu_percent']:.0f}% of the machine"
+            line += "."
+        story.append(P(line, "small"))
+
     # Limitations
     story.append(Paragraph("Limitations and confidence", st["h2"]))
     al = m.get("alignment", {})
+    for label, c in (al.get("per_speaker") or {}).items():
+        story.append(P(f"• {names.get(label, label)}: mean speaker-assignment confidence {c['mean_confidence']:.0%}, "
+                       f"{c['uncertain']} of {c['segments']} lines uncertain.", "small"))
     story.append(P(f"{al.get('uncertain_segments', 0)} of {al.get('segments', 0)} transcript segments have an uncertain speaker "
                    f"assignment (confidence below {al.get('threshold', 0.6):.0%} or overlapping speech)."))
     for lim in LIMITATIONS:
