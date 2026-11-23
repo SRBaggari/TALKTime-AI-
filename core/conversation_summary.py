@@ -109,6 +109,34 @@ def extract_topics(segments: list[TranscriptSegment], top_n: int = 8, language: 
             for t, c in ranked]
 
 
+def topic_recurrence(segments: list[TranscriptSegment], topics: list[dict], gap: float = 60.0) -> list[dict]:
+    """For each topic, the separate *episodes* in which it is discussed.
+
+    Mentions closer than ``gap`` seconds belong to one episode. A topic with 2+
+    episodes was returned to later in the conversation (``revisited``).
+    Matching is on the transcript text (all words of the topic phrase present).
+    """
+    out = []
+    segs = sorted(segments, key=lambda s: s.start)
+    for t in topics:
+        words = [w for w in t["topic"].lower().split() if w]
+        hits = [s for s in segs if all(w in s.text.lower() for w in words)]
+        episodes: list[dict] = []
+        for s in hits:
+            if episodes and s.start - episodes[-1]["end"] <= gap:
+                ep = episodes[-1]
+                ep["end"] = max(ep["end"], s.end)
+                ep["mentions"] += 1
+                ep["speakers"].add(s.speaker)
+            else:
+                episodes.append({"start": s.start, "end": s.end, "mentions": 1, "speakers": {s.speaker}})
+        for ep in episodes:
+            ep["speakers"] = sorted(x for x in ep["speakers"] if x)
+        out.append({"topic": t["topic"], "episodes": episodes, "revisited": len(episodes) >= 2,
+                    "segments_mentioning": len(hits)})
+    return out
+
+
 def extract_insights(segments: list[TranscriptSegment], language: str | None = "en") -> dict[str, list[dict]]:
     out: dict[str, list[dict]] = {k: [] for k in PATTERNS}
     if not is_english(language):
