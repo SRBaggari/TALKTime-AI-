@@ -10,7 +10,7 @@ import streamlit as st
 from core.conversation_summary import with_display_names
 from database import repository
 from services.analysis_service import merge_speakers
-from ui.components import (PLOTLY_CONFIG, chip, load, metrics_row, names_and_colors, note, page_header,
+from ui.components import (PLOTLY_CONFIG, badge, chip, load, metrics_row, names_and_colors, note, page_header,
                            recording_picker, section, style_fig)
 from utils.time_formatter import format_duration, format_percent, format_timestamp
 
@@ -56,6 +56,12 @@ for i in range(0, len(labels), per_row):
                 f'<div class="tt-metric-sub">{format_percent(st_["share_of_speaking_time"])} of speaking time · '
                 f'{format_percent(st_["share_of_recording"])} of recording</div>', unsafe_allow_html=True)
             st.progress(min(1.0, st_["share_of_speaking_time"]))
+            conf = m.get("alignment", {}).get("per_speaker", {}).get(label)
+            if conf:
+                kind = "ok" if conf["mean_confidence"] >= 0.9 else "warn" if conf["mean_confidence"] >= 0.6 else "bad"
+                st.markdown(badge(f"{conf['mean_confidence']:.0%} assignment confidence", kind) +
+                            f' <span class="tt-row-sub">{conf["uncertain"]} of {conf["segments"]} lines uncertain</span>',
+                            unsafe_allow_html=True)
             a, b = st.columns(2)
             a.markdown(f'<div class="tt-metric-label">Turns</div><b>{st_["num_turns"]}</b>', unsafe_allow_html=True)
             b.markdown(f'<div class="tt-metric-label">Average turn</div><b>{format_duration(st_["avg_turn"])}</b>', unsafe_allow_html=True)
@@ -134,6 +140,51 @@ with c2:
     for w in part.get("warnings", []):
         st.warning(with_display_names(w, names), icon=":material/info:")
     note(part.get("caveat", ""))
+
+# ---------------------------------------------------------------- advanced participation
+section("Conversation dynamics", "Several independent measures, shown side by side. No single number defines a "
+        "good conversation.", tag="measured")
+g, dr, tpm = part.get("gini"), part.get("dominance_ratio"), part.get("turns_per_minute")
+lt = part.get("longest_turn") or {}
+art = part.get("avg_response_time")
+metrics_row([
+    ("Gini (speaking time)", "—" if g is None else f"{g:.2f}", "0 = equal · 1 = concentrated", None),
+    ("Dominance ratio", "—" if dr is None else f"{dr:.2f}×", "Top share ÷ equal share", None),
+    ("Turns per minute", f"{tpm:.1f}" if tpm else "—", "Pace of turn-taking", None),
+    ("Average response time", "—" if art is None else f"{art:.1f}s", "Gap before replying", None),
+])
+st.write("")
+per = part.get("per_speaker", {})
+left, right = st.columns([3, 2], gap="large")
+with left:
+    if per:
+        rt = [(names[l], per[l]["avg_response_time"], per[l]["responses"], colors[l]) for l in labels
+              if per.get(l, {}).get("avg_response_time") is not None]
+        if rt:
+            fig = go.Figure(go.Bar(x=[r[0] for r in rt], y=[r[1] for r in rt],
+                                   marker=dict(color=[r[3] for r in rt], cornerradius=4), customdata=[r[2] for r in rt],
+                                   hovertemplate="<b>%{x}</b><br>average reply after %{y:.2f}s<br>%{customdata} replies<extra></extra>"))
+            fig.update_yaxes(title="average response time (s)")
+            st.plotly_chart(style_fig(fig, 260, legend=False), width="stretch", theme=None, config=PLOTLY_CONFIG)
+        else:
+            st.caption("No speaker changes with a gap, so response times cannot be measured.")
+with right:
+    inds = part.get("dominance_indicators") or []
+    if inds:
+        st.markdown("**Dominance indicators**")
+        for ind in inds:
+            st.markdown(f'<div class="tt-row"><div><div class="tt-row-title">{escape(ind["indicator"])}</div>'
+                        f'<div class="tt-row-sub">{escape(ind["explanation"])}</div></div>'
+                        f'<div>{chip(names.get(ind["speaker"], ind["speaker"]), colors.get(ind["speaker"], "#64748B"))} '
+                        f'<b>{escape(ind["value"])}</b></div></div>', unsafe_allow_html=True)
+    elif len(labels) < 2:
+        st.caption("Dominance indicators need at least two speakers.")
+if lt.get("speaker"):
+    note(f"Longest uninterrupted turn: {names.get(lt['speaker'], lt['speaker'])}, {lt['duration']:.1f}s.")
+with st.expander("Formulas", icon=":material/function:"):
+    for k, v in (part.get("formulas") or {}).items():
+        st.markdown(f"- **{k.replace('_', ' ').capitalize()}**: `{v}`")
+    st.caption(part.get("caveat", ""))
 
 # ---------------------------------------------------------------- table
 section("All speaker statistics")
