@@ -90,9 +90,11 @@ def extract_topics(segments: list[TranscriptSegment], top_n: int = 8, language: 
                 if ent.label_ in {"ORG", "PRODUCT", "GPE", "PERSON", "EVENT", "WORK_OF_ART", "LAW", "NORP", "FAC"}:
                     add(ent.text, seg, 1.5)
     else:
+        # No stop-word list exists here for non-English languages, so require longer words (>= 4 letters,
+        # not counting vowel signs) to filter out the most common short function words.
         for seg in segs:
             for tok in _tokens(seg.text):
-                if tok.lower() not in STOPWORDS:
+                if tok.lower() not in STOPWORDS and sum(ch.isalpha() for ch in tok) >= 4:
                     add(tok, seg)
 
     # Merge single words into multi-word phrases that contain them.

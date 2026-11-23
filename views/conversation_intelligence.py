@@ -92,7 +92,11 @@ with tabs[0]:
 # ---------------------------------------------------------------- topics
 with tabs[1]:
     topics = m.get("topics", [])
-    section("Main topics", "Frequent noun phrases and named entities (spaCy, local).", tag="inferred")
+    if fs.get("topics_spacy", True):
+        section("Main topics", "Frequent noun phrases and named entities (spaCy, local).", tag="inferred")
+    else:
+        section("Main topics", "Keyword frequency (no stop-word list for this language, so some common words may "
+                "appear).", tag="inferred")
     if topics:
         fig = go.Figure(go.Bar(y=[t["topic"] for t in topics], x=[t["mentions"] for t in topics], orientation="h",
                                marker=dict(color="#9085E9", cornerradius=4),

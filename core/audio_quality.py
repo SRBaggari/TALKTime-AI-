@@ -6,6 +6,8 @@ Metrics (all in dBFS unless noted):
 * ``noise_floor`` — RMS over non-speech regions (or the 10th-percentile frame
   level when there is too little non-speech).
 * ``snr_db`` — speech_level − noise_floor (an estimate; speech regions contain noise too).
+  The floor is clamped at −90 dBFS: lower values mean digitally silent gaps
+  (synthetic or heavily gated audio), reported via ``digital_silence``.
 * ``clipping_ratio`` — fraction of samples at |x| ≥ 0.99 full scale; clipping
   *events* are runs of ≥3 consecutive such samples (the signature of a flattened peak).
 * ``bandwidth`` — frequency below which 99% of speech energy lies (telephone
@@ -19,6 +21,8 @@ import numpy as np
 
 from core import intervals as iv
 from core.audio_preprocessor import rms_envelope
+
+DIGITAL_SILENCE_DB = -90.0
 
 PENALTIES = {
     "low_snr_severe": 30, "low_snr": 15, "very_low_volume": 25, "low_volume": 12, "clipping_severe": 25,
@@ -89,6 +93,8 @@ def analyze_quality(audio: np.ndarray, sr: int, speech: list[iv.Interval], probe
         noise_floor = float(np.percentile(non_speech_frames, 50))
     else:
         noise_floor = float(np.percentile(db, 10)) if db.size else -120.0
+    digital_silence = noise_floor < DIGITAL_SILENCE_DB
+    noise_floor = max(noise_floor, DIGITAL_SILENCE_DB)  # below this is digital silence, not a real noise floor
     snr = (speech_level - noise_floor) if speech_level is not None else None
 
     clipped = np.abs(x) >= 0.99
@@ -151,6 +157,7 @@ def analyze_quality(audio: np.ndarray, sr: int, speech: list[iv.Interval], probe
         "rms_dbfs": round(to_db(overall_rms), 1),
         "speech_level_dbfs": round(speech_level, 1) if speech_level is not None else None,
         "noise_floor_dbfs": round(noise_floor, 1),
+        "digital_silence": digital_silence,
         "snr_db": round(snr, 1) if snr is not None else None,
         "clipping_ratio": clip_ratio,
         "clipping_events": runs,
