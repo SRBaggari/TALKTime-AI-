@@ -55,6 +55,29 @@ with right:
                            mime="text/csv", width="stretch", icon=":material/table_view:", key=f"dl_{name}")
     st.download_button("Full analytics (JSON)", export_service.metrics_json_bytes(data), file_name=f"TalkTime_{slug}_analytics.json",
                        mime="application/json", width="stretch", icon=":material/data_object:")
+    section("Workbooks and transcripts")
+
+    @st.cache_data(show_spinner=False, max_entries=4)
+    def _xlsx(rid_: str, stamp: str) -> bytes:
+        return export_service.xlsx_bytes(load(rid_))
+
+    @st.cache_data(show_spinner=False, max_entries=4)
+    def _html(rid_: str, stamp: str) -> str:
+        return export_service.interactive_html(load(rid_))
+
+    # Cache key changes whenever names or speaker assignments are corrected.
+    stamp = str(hash((str(rec.get("updated_at")), tuple(s["display_name"] for s in data["speakers"]),
+                      tuple(t.speaker for t in data["transcript"]), len(data["transcript"]))))
+    st.download_button("Excel workbook (XLSX)", _xlsx(rid, stamp), file_name=f"TalkTime_{slug}.xlsx",
+                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch",
+                       icon=":material/grid_on:", help="Summary, speakers, participation, transcript, segments, events, "
+                       "questions, insights, audio quality, performance, and one transcript sheet per speaker.")
+    st.download_button("Speaker-wise transcript (TXT)", export_service.speaker_transcript_text(data).encode("utf-8-sig"),
+                       file_name=f"TalkTime_{slug}_transcript.txt", mime="text/plain", width="stretch",
+                       icon=":material/article:")
+    st.download_button("Interactive charts (HTML)", _html(rid, stamp).encode("utf-8"),
+                       file_name=f"TalkTime_{slug}_charts.html", mime="text/html", width="stretch",
+                       icon=":material/bar_chart:", help="Self-contained file with zoomable charts; opens offline in any browser.")
 
 section("Previously generated reports")
 reports = [r for r in repository.list_reports(rid) if Path(r["path"]).is_file()]
