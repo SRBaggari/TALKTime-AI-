@@ -96,6 +96,9 @@ class TranscriptSegmentRow(Base):
     sentiment_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     words: Mapped[list] = mapped_column(JSON, default=list)
     overlapping_speakers: Mapped[list] = mapped_column(JSON, default=list)
+    language: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    language_probability: Mapped[float | None] = mapped_column(Float, nullable=True)
+    original_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class AnalysisResult(Base):

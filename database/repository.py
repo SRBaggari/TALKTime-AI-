@@ -122,7 +122,8 @@ def save_analysis(recording_id: str, diarization: list[SpeakerSegment], transcri
                 speaker_confidence=t.speaker_confidence, uncertain=t.uncertain, manually_corrected=i in corrected_ids,
                 avg_logprob=t.avg_logprob, no_speech_prob=t.no_speech_prob, sentiment=t.sentiment,
                 sentiment_score=t.sentiment_score, words=[asdict(w) for w in t.words],
-                overlapping_speakers=list(t.overlapping_speakers),
+                overlapping_speakers=list(t.overlapping_speakers), language=t.language,
+                language_probability=t.language_probability, original_text=t.original_text,
             ))
 
         for kind, items in (metrics.get("insights") or {}).items():
@@ -161,7 +162,8 @@ def load_analysis(recording_id: str) -> dict | None:
                 avg_logprob=r.avg_logprob, no_speech_prob=r.no_speech_prob, speaker=r.speaker_label,
                 speaker_confidence=r.speaker_confidence, uncertain=r.uncertain,
                 overlapping_speakers=list(r.overlapping_speakers or []), sentiment=r.sentiment,
-                sentiment_score=r.sentiment_score))
+                sentiment_score=r.sentiment_score, language=r.language,
+                language_probability=r.language_probability, original_text=r.original_text))
             row_ids.append(r.id)
             corrected.append(r.manually_corrected)
         analysis = s.scalar(select(AnalysisResult).where(AnalysisResult.recording_id == recording_id))

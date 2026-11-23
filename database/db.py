@@ -22,6 +22,28 @@ def _enable_sqlite_fk(dbapi_conn, _record):
     cur.close()
 
 
+def migrate_sqlite(engine: Engine) -> list[str]:
+    """Add columns introduced after a database was created (create_all never alters tables).
+
+    Only additive, nullable columns are handled, so existing data is untouched.
+    """
+    from sqlalchemy import inspect, text
+
+    added = []
+    insp = inspect(engine)
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if not insp.has_table(table.name):
+                continue
+            existing = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name not in existing:
+                    ddl_type = col.type.compile(dialect=engine.dialect)
+                    conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {ddl_type}'))
+                    added.append(f"{table.name}.{col.name}")
+    return added
+
+
 def init_db(url: str | None = None) -> Engine:
     """Create (or re-create for a different URL) the engine and tables."""
     global _engine, _SessionFactory
@@ -34,6 +56,8 @@ def init_db(url: str | None = None) -> Engine:
     if url.startswith("sqlite"):
         event.listen(engine, "connect", _enable_sqlite_fk)
     Base.metadata.create_all(engine)
+    if url.startswith("sqlite"):
+        migrate_sqlite(engine)
     _engine = engine
     _SessionFactory = sessionmaker(bind=engine, expire_on_commit=False)
     return engine

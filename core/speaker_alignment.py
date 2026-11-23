@@ -127,7 +127,9 @@ def align(
                         new = TranscriptSegment(
                             start=rw[0].start, end=rw[-1].end, text=text, words=rw,
                             avg_logprob=seg.avg_logprob, no_speech_prob=seg.no_speech_prob,
-                            speaker=rw[0].speaker,
+                            speaker=rw[0].speaker, language=seg.language,
+                            language_probability=seg.language_probability,
+                            original_text=seg.original_text if len(run) == len(words) else None,
                         )
                         out.append(_finalize(new, groups, uncertainty_threshold, all(snapped_flags[j] for j in run)))
                 run = [i] if w is not None else []
@@ -136,6 +138,8 @@ def align(
             new = TranscriptSegment(
                 start=seg.start, end=seg.end, text=seg.text, words=list(seg.words),
                 avg_logprob=seg.avg_logprob, no_speech_prob=seg.no_speech_prob, speaker=spk,
+                language=seg.language, language_probability=seg.language_probability,
+                original_text=seg.original_text,
             )
             out.append(_finalize(new, groups, uncertainty_threshold, snapped))
     out.sort(key=lambda s: (s.start, s.end))

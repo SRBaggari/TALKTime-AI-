@@ -49,6 +49,10 @@ class TranscriptSegment:
     # Filled by NLP analysis
     sentiment: str | None = None
     sentiment_score: float | None = None
+    # Filled by transcription (per-region language in code-switching mode)
+    language: str | None = None
+    language_probability: float | None = None
+    original_text: str | None = None  # Whisper's text before script normalisation (if transliterated)
 
     @property
     def duration(self) -> float:
@@ -76,3 +80,5 @@ class TranscriptionResult:
     multilingual: bool = False
     load_seconds: float = 0.0  # model load time (0 when already cached in memory)
     duration_after_vad: float | None = None
+    language_distribution: dict = field(default_factory=dict)  # language -> seconds of speech (multilingual mode)
+    transliterated_segments: int = 0
