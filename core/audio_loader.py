@@ -85,5 +85,42 @@ def load_audio(path: str | Path, sr: int = config.TARGET_SAMPLE_RATE) -> tuple[n
     return audio, sr
 
 
+def probe_audio(path: str | Path) -> dict:
+    """Original stream metadata (sample rate, channels, codec, bitrate). Never raises."""
+    path = Path(path)
+    info: dict = {}
+    ffprobe = shutil.which("ffprobe")
+    if ffprobe:
+        try:
+            import json
+
+            proc = subprocess.run([ffprobe, "-v", "error", "-select_streams", "a:0", "-show_entries",
+                                   "stream=codec_name,sample_rate,channels,bit_rate:format=format_name,duration,bit_rate",
+                                   "-of", "json", str(path)], capture_output=True, timeout=60, check=False)
+            data = json.loads(proc.stdout or b"{}")
+            st = (data.get("streams") or [{}])[0]
+            fmt = data.get("format") or {}
+            info = {
+                "codec": st.get("codec_name"),
+                "sample_rate": int(st["sample_rate"]) if st.get("sample_rate") else None,
+                "channels": int(st["channels"]) if st.get("channels") else None,
+                "bit_rate": int(st.get("bit_rate") or fmt.get("bit_rate") or 0) or None,
+                "container": fmt.get("format_name"),
+                "duration": float(fmt["duration"]) if fmt.get("duration") else None,
+            }
+        except Exception:
+            info = {}
+    if not info.get("sample_rate"):
+        try:
+            import soundfile as sf
+
+            i = sf.info(str(path))
+            info.update(sample_rate=i.samplerate, channels=i.channels, codec=i.subtype, container=i.format,
+                        duration=i.duration)
+        except Exception:
+            pass
+    return info
+
+
 def audio_duration(audio: np.ndarray, sr: int) -> float:
     return float(audio.size) / float(sr)
