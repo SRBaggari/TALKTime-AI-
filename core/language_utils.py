@@ -116,7 +116,25 @@ def tag_segment(text: str, min_share: float = 0.15, min_words: int = 2) -> dict:
 
 
 def summarize_languages(segments, detected: str | None, probs: list | None = None) -> dict:
-    """Recording-level language report built from per-segment script tags."""
+    """Recording-level language report.
+
+    * ``languages_spoken`` — seconds of transcribed speech per language, from each line's own
+      language (set per speech region in code-switching mode). This is the primary signal.
+    * ``script_mix`` — share of words per writing script (secondary, text-based).
+    """
+    spoken: Counter = Counter()
+    transliterated = 0
+    for seg in segments:
+        lang = getattr(seg, "language", None) or detected
+        if lang:
+            spoken[lang] += max(seg.end - seg.start, 0.0)
+        if getattr(seg, "original_text", None):
+            transliterated += 1
+    total_spoken = sum(spoken.values())
+    languages_spoken = {k: {"name": language_name(k), "seconds": round(v, 2),
+                            "share": round(v / total_spoken, 4) if total_spoken else 0.0}
+                        for k, v in spoken.most_common()}
+    multi_lang = len([v for v in languages_spoken.values() if v["share"] >= 0.1]) >= 2
     words_by_script: Counter = Counter()
     switch_segments = 0
     for seg in segments:
@@ -136,10 +154,12 @@ def summarize_languages(segments, detected: str | None, probs: list | None = Non
         "script_mix": mix,
         "script_languages": {k: SCRIPT_LANGS.get(k, k) for k in mix},
         "code_switch_segments": switch_segments,
-        "code_switching": bool(switch_segments) or len([v for v in mix.values() if v >= 0.1]) >= 2,
+        "code_switching": multi_lang or bool(switch_segments) or len([v for v in mix.values() if v >= 0.1]) >= 2,
+        "languages_spoken": languages_spoken,
+        "transliterated_segments": transliterated,
         "secondary_scripts": secondary,
-        "method": "Language: Whisper language identification (first 30 s, or per segment in multilingual mode). "
-                  "Code-switching: Unicode script of each transcribed word.",
+        "method": "Language: Whisper language identification — once for the recording, or per speech region in "
+                  "code-switching mode. Script mix: Unicode script of each transcribed word.",
     }
 
 

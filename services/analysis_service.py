@@ -253,7 +253,8 @@ def run_analysis(recording_id: str, options: AnalysisOptions, progress=lambda f,
         engine = TranscriptionEngine(s.whisper_model, s.compute_type, s.cpu_threads)
         tr = engine.transcribe(audio, sr, language=options.language, beam_size=s.beam_size,
                                vad_filter=s.vad_filter, word_timestamps=s.word_timestamps,
-                               progress=stage(0.07, 0.55, "Transcribing"), multilingual=options.multilingual)
+                               progress=stage(0.07, 0.55, "Transcribing"), multilingual=options.multilingual,
+                               regions=[tuple(x) for x in vad["speech"]])
         timings["transcription"] = time.perf_counter() - t
         loads["transcription"] = tr.load_seconds
         if not s.keep_models_loaded:
@@ -291,6 +292,7 @@ def run_analysis(recording_id: str, options: AnalysisOptions, progress=lambda f,
                                   previous={"quality": quality}, vad=vad, audio=audio, sr=sr,
                                   language_probs=tr.language_probs)
         metrics["language"]["multilingual_mode"] = tr.multilingual
+        metrics["language"]["region_language_seconds"] = tr.language_distribution
         metrics["language"]["selected"] = options.language or "auto"
         timings["analytics"] = time.perf_counter() - t
         del audio
