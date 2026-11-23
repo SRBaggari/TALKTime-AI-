@@ -4,6 +4,7 @@ from __future__ import annotations
 import gc
 import logging
 import threading
+import time
 from typing import Callable
 
 import numpy as np
@@ -58,10 +59,14 @@ class TranscriptionEngine:
     def key(self) -> tuple:
         return (self.model_size, self.compute_type, self.cpu_threads)
 
+    last_load_seconds: float = 0.0
+
     def load(self):
         with self._lock:
             if self.key in self._models:
+                self.last_load_seconds = 0.0
                 return self._models[self.key]
+            t0 = time.perf_counter()
             path = local_whisper_path(self.model_size)
             if path is None:
                 raise ModelUnavailableError(
@@ -80,6 +85,7 @@ class TranscriptionEngine:
             model = WhisperModel(path, device="cpu", compute_type=self.compute_type,
                                  cpu_threads=self.cpu_threads, local_files_only=True)
             self._models[self.key] = model
+            self.last_load_seconds = time.perf_counter() - t0
             return model
 
     @classmethod
@@ -101,7 +107,10 @@ class TranscriptionEngine:
         vad_filter: bool = True,
         word_timestamps: bool = True,
         progress: ProgressCallback | None = None,
+        multilingual: bool = False,
     ) -> TranscriptionResult:
+        """``multilingual=True`` re-detects the language per segment (code-switched speech);
+        the original spoken language/script is preserved — nothing is translated."""
         if sr != config.TARGET_SAMPLE_RATE:
             raise ValueError("Whisper expects 16 kHz audio")
         model = self.load()
@@ -113,6 +122,8 @@ class TranscriptionEngine:
             vad_filter=vad_filter,
             word_timestamps=word_timestamps,
             condition_on_previous_text=False,  # reduces hallucinated repetition loops
+            multilingual=multilingual and language is None,
+            task="transcribe",  # never translate: keep the original spoken language
         )
         segments: list[TranscriptSegment] = []
         for s in seg_iter:  # generator: decoding happens lazily here
@@ -141,4 +152,8 @@ class TranscriptionEngine:
             language_probability=getattr(info, "language_probability", None),
             duration=duration,
             model_name=f"faster-whisper-{self.model_size} ({self.compute_type})",
+            language_probs=sorted(getattr(info, "all_language_probs", None) or [], key=lambda x: -x[1])[:5],
+            multilingual=multilingual and language is None,
+            load_seconds=self.last_load_seconds,
+            duration_after_vad=getattr(info, "duration_after_vad", None),
         )

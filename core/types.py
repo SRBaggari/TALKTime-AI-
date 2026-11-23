@@ -72,3 +72,7 @@ class TranscriptionResult:
     language_probability: float | None
     duration: float
     model_name: str = ""
+    language_probs: list = field(default_factory=list)  # [(code, prob), ...] top-N from Whisper
+    multilingual: bool = False
+    load_seconds: float = 0.0  # model load time (0 when already cached in memory)
+    duration_after_vad: float | None = None

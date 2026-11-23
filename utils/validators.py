@@ -3,31 +3,12 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
-# Subset of Whisper languages offered in the UI (code -> name).
-SUPPORTED_LANGUAGES: dict[str, str] = {
-    "auto": "Auto-detect",
-    "en": "English",
-    "hi": "Hindi",
-    "te": "Telugu",
-    "ta": "Tamil",
-    "kn": "Kannada",
-    "ml": "Malayalam",
-    "mr": "Marathi",
-    "bn": "Bengali",
-    "gu": "Gujarati",
-    "ur": "Urdu",
-    "es": "Spanish",
-    "fr": "French",
-    "de": "German",
-    "it": "Italian",
-    "pt": "Portuguese",
-    "nl": "Dutch",
-    "ru": "Russian",
-    "ar": "Arabic",
-    "zh": "Chinese",
-    "ja": "Japanese",
-    "ko": "Korean",
-}
+from core.language_utils import WHISPER_LANGUAGES, ordered_language_options
+
+# All Whisper languages, priority languages first (code -> name).
+SUPPORTED_LANGUAGES: dict[str, str] = {c: ("Auto-detect" if c == "auto" else WHISPER_LANGUAGES[c])
+                                       for c in ordered_language_options()}
+
 
 
 def validate_language(code: str | None) -> str | None:
@@ -36,7 +17,7 @@ def validate_language(code: str | None) -> str | None:
         return None
     code = code.strip().lower()
     if code not in SUPPORTED_LANGUAGES:
-        raise ValueError(f"Unsupported language code: {code}")
+        raise ValueError(f"Language '{code}' is not supported by Whisper. Choose Auto-detect or a listed language.")
     return code
 
 
