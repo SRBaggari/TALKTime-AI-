@@ -7,8 +7,8 @@ from database import repository
 from services.analysis_service import compute_metrics
 from tests.conftest import ROOT, seg, tseg, words_for
 
-PAGES = ["pages/dashboard.py", "pages/upload_audio.py", "pages/speaker_analysis.py", "pages/conversation_timeline.py",
-         "pages/conversation_intelligence.py", "pages/call_comparison.py", "pages/reports.py", "pages/settings.py"]
+PAGES = ["views/dashboard.py", "views/upload_audio.py", "views/speaker_analysis.py", "views/conversation_timeline.py",
+         "views/conversation_intelligence.py", "views/call_comparison.py", "views/reports.py", "views/settings.py"]
 
 
 def _seed(tone_wav, title):
@@ -26,7 +26,7 @@ def _run(page):
     at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60)
     at.run()
     assert not at.exception, at.exception
-    if page != "pages/dashboard.py":
+    if page != "views/dashboard.py":
         at.switch_page(page)
         at.run()
     return at
@@ -48,6 +48,6 @@ def test_pages_render_with_data(clean_db, tone_wav, page):
 
 def test_dashboard_shows_database_stats(clean_db, tone_wav):
     _seed(tone_wav, "Budget review")
-    at = _run("pages/dashboard.py")
+    at = _run("views/dashboard.py")
     html = " ".join(m.value for m in at.markdown)
     assert "Recordings analysed" in html and "Budget review" in html

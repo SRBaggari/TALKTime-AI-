@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="40" viewBox="0 0 200 40">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#199E70"/>
+      <stop offset="1" stop-color="#3987E5"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="4" width="32" height="32" rx="9" fill="url(#g)"/>
+  <g fill="#FFFFFF">
+    <rect x="9" y="17" width="3" height="6" rx="1.5"/>
+    <rect x="14.5" y="12" width="3" height="16" rx="1.5"/>
+    <rect x="20" y="15" width="3" height="10" rx="1.5"/>
+    <rect x="25.5" y="18" width="3" height="4" rx="1.5"/>
+  </g>
+  <text x="44" y="26.5" font-family="Segoe UI, Inter, system-ui, sans-serif" font-size="18" font-weight="700" fill="#F1F5F9" letter-spacing="-0.3">TalkTime <tspan fill="#7FAEEB">AI</tspan></text>
+</svg>

@@ -53,31 +53,27 @@ s = settings()
 
 pages = {
     "Overview": [
-        st.Page("pages/dashboard.py", title="Dashboard", icon=":material/space_dashboard:", default=True),
-        st.Page("pages/upload_audio.py", title="Upload Recording", icon=":material/upload_file:"),
+        st.Page("views/dashboard.py", title="Dashboard", icon=":material/space_dashboard:", default=True),
+        st.Page("views/upload_audio.py", title="Upload Recording", icon=":material/upload_file:"),
     ],
     "Analysis": [
-        st.Page("pages/speaker_analysis.py", title="Speaker Analysis", icon=":material/record_voice_over:"),
-        st.Page("pages/conversation_timeline.py", title="Conversation Timeline", icon=":material/view_timeline:"),
-        st.Page("pages/conversation_intelligence.py", title="Conversation Intelligence", icon=":material/insights:"),
-        st.Page("pages/call_comparison.py", title="Call Comparison", icon=":material/compare_arrows:"),
+        st.Page("views/speaker_analysis.py", title="Speaker Analysis", icon=":material/record_voice_over:"),
+        st.Page("views/conversation_timeline.py", title="Conversation Timeline", icon=":material/view_timeline:"),
+        st.Page("views/conversation_intelligence.py", title="Conversation Intelligence", icon=":material/insights:"),
+        st.Page("views/call_comparison.py", title="Call Comparison", icon=":material/compare_arrows:"),
     ],
     "Workspace": [
-        st.Page("pages/reports.py", title="Reports", icon=":material/description:"),
-        st.Page("pages/settings.py", title="Settings", icon=":material/settings:"),
+        st.Page("views/reports.py", title="Reports", icon=":material/description:"),
+        st.Page("views/settings.py", title="Settings", icon=":material/settings:"),
     ],
 }
 
-with st.sidebar:
-    st.markdown(
-        f'<div class="tt-brand"><div class="tt-brand-mark">T</div><div>'
-        f'<div class="tt-brand-name">{config.APP_NAME}</div><div class="tt-brand-sub">Conversation analytics · local</div>'
-        f'</div></div>', unsafe_allow_html=True)
+st.logo(str(config.ASSETS_DIR / "logo" / "logo.svg"), size="large",
+        icon_image=str(config.ASSETS_DIR / "logo" / "icon.svg"))
 
 nav = st.navigation(pages)
 
 with st.sidebar:
-    st.divider()
     ready, missing = readiness(s.whisper_model)
     if ready:
         st.markdown('<span class="tt-badge tt-badge-ok">✓ Offline ready</span>', unsafe_allow_html=True)

@@ -7,6 +7,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from core.conversation_summary import with_display_names
 from database import repository
 from services.analysis_service import merge_speakers
 from ui.components import (PLOTLY_CONFIG, chip, load, metrics_row, names_and_colors, note, page_header,
@@ -131,7 +132,7 @@ with c2:
     if part.get("turn_balance_score") is not None:
         st.markdown(f"Turn-taking balance: **{part['turn_balance_score']:.2f}**")
     for w in part.get("warnings", []):
-        st.warning(w, icon=":material/info:")
+        st.warning(with_display_names(w, names), icon=":material/info:")
     note(part.get("caveat", ""))
 
 # ---------------------------------------------------------------- table

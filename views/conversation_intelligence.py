@@ -7,7 +7,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from core.conversation_summary import ollama_status, ollama_summarize
+from core.conversation_summary import ollama_status, ollama_summarize, with_display_names
 from database.db import session_scope
 from database.models import AnalysisResult
 from ui.components import (PLOTLY_CONFIG, chip, load, metrics_row, names_and_colors, note, page_header,
@@ -47,7 +47,7 @@ tabs = st.tabs(["Summary", "Topics & key points", "Questions", "Overlaps", "Sile
 # ---------------------------------------------------------------- summary
 with tabs[0]:
     section("Conversation summary", "Built only from measured statistics and rule-based extraction — no generative model.", tag="inferred")
-    st.markdown(f'<div class="tt-card"><div class="tt-seg-text">{escape(m.get("summary", ""))}</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="tt-card"><div class="tt-seg-text">{escape(with_display_names(m.get("summary", ""), names))}</div></div>', unsafe_allow_html=True)
     ins = m.get("insights", {})
     q = m.get("questions", {})
     it = m.get("interruptions", {})
@@ -276,5 +276,5 @@ with tabs[7]:
         st.plotly_chart(style_fig(fig, 320), width="stretch", theme=None, config=PLOTLY_CONFIG)
         st.caption("Solid bars: share of speaking time. Hatched bars: share of turns.")
     for w in pa.get("warnings", []):
-        st.warning(w, icon=":material/info:")
+        st.warning(with_display_names(w, names), icon=":material/info:")
     note(pa.get("caveat", ""))

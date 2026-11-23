@@ -49,10 +49,10 @@ def job_monitor(recording_id: str) -> None:
             c1, c2, c3 = st.columns(3)
             if c1.button("Speaker analysis", type="primary", width="stretch", icon=":material/record_voice_over:"):
                 st.session_state.current_recording = recording_id
-                st.switch_page("pages/speaker_analysis.py")
+                st.switch_page("views/speaker_analysis.py")
             if c2.button("Timeline & transcript", width="stretch", icon=":material/view_timeline:"):
                 st.session_state.current_recording = recording_id
-                st.switch_page("pages/conversation_timeline.py")
+                st.switch_page("views/conversation_timeline.py")
             if c3.button("Analyse another", width="stretch", icon=":material/add:"):
                 st.session_state.pop("active_job", None)
                 st.rerun(scope="app")

@@ -85,6 +85,8 @@ if show_overlap:
                     hovertemplate="<b>Silence</b> (%{customdata[2]})<br>%{customdata[0]} · %{customdata[1]:.1f}s<extra></extra>")
         lane_names.append("Silence")
 fig.update_layout(barmode="overlay", bargap=0.3)
+fig.update_yaxes(automargin=True, ticklabelstandoff=8)
+fig.update_xaxes(automargin=True)
 fig.update_yaxes(categoryorder="array", categoryarray=list(reversed(lane_names)))
 tickvals = [duration * k / 8 for k in range(9)]
 fig.update_xaxes(range=[0, duration], tickvals=tickvals, ticktext=[format_timestamp(t) for t in tickvals], showgrid=True)
@@ -130,8 +132,8 @@ with st.container(border=True):
     for i, t in rows[(page - 1) * PAGE: page * PAGE]:
         color = colors.get(t.speaker, "#64748B")
         playing = t.start <= current_t < t.end and seek["start"] > 0
-        c1, c2, c3 = st.columns([1.1, 9, 1.2], vertical_alignment="top")
-        if c1.button(format_timestamp(t.start), key=f"seek_{rid}_{i}", icon=":material/play_arrow:", width="stretch",
+        c1, c2, c3 = st.columns([1.5, 8.5, 1.5], vertical_alignment="top")
+        if c1.button(format_timestamp(t.start), key=f"seek_{rid}_{i}", icon=":material/play_arrow:", width="stretch", help="Play this segment",
                      type="primary" if playing else "secondary"):
             set_seek(t.start, t.end)
             st.rerun()

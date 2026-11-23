@@ -30,9 +30,9 @@ if stats["recordings"] == 0:
     )
     c1, c2, _ = st.columns([1, 1, 3])
     if c1.button("Upload recording", type="primary", icon=":material/upload:", width="stretch"):
-        st.switch_page("pages/upload_audio.py")
+        st.switch_page("views/upload_audio.py")
     if c2.button("Check setup", icon=":material/settings:", width="stretch"):
-        st.switch_page("pages/settings.py")
+        st.switch_page("views/settings.py")
     failed = [r for r in recordings if r["status"] == "failed"]
     if failed:
         st.warning(f"{len(failed)} recording(s) failed to analyse. Open Upload Recording to retry or Settings to delete them.")
@@ -90,7 +90,7 @@ with left:
                 f'{r["num_speakers"]} speakers · {status_badge(r["status"])}</div>', unsafe_allow_html=True)
             if r["status"] == "completed" and c2.button("Open", key=f"open_{r['id']}", width="stretch"):
                 st.session_state.current_recording = r["id"]
-                st.switch_page("pages/speaker_analysis.py")
+                st.switch_page("views/speaker_analysis.py")
 with right:
     section("Recent activity")
     with st.container(border=True):

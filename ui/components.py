@@ -22,7 +22,7 @@ def _css() -> str:
 
 
 def inject_css() -> None:
-    st.markdown(f"<style>{_css()}</style>", unsafe_allow_html=True)
+    st.html(f"<style>{_css()}</style>")
 
 
 def settings() -> config.AppSettings:
@@ -106,7 +106,7 @@ def recording_picker(key: str = "rec_picker") -> str | None:
                     "Upload a recording to see speaker analytics, timelines and conversation insights here.",
                     icon="♪")
         if st.button("Upload a recording", type="primary", icon=":material/upload:"):
-            st.switch_page("pages/upload_audio.py")
+            st.switch_page("views/upload_audio.py")
         return None
     ids = [r["id"] for r in recs]
     current = st.session_state.get("current_recording")
@@ -135,13 +135,15 @@ def style_fig(fig: go.Figure, height: int = 320, legend: bool = True) -> go.Figu
     fig.update_layout(
         height=height, paper_bgcolor=CHART_SURFACE, plot_bgcolor=CHART_SURFACE,
         font=dict(family="Segoe UI, Inter, system-ui, sans-serif", color=TEXT, size=12.5),
-        margin=dict(l=8, r=8, t=12, b=8), showlegend=legend,
+        margin=dict(l=8, r=8, t=12, b=8, autoexpand=True), showlegend=legend,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(color=AXIS_TEXT)),
         hoverlabel=dict(bgcolor="#0F172A", bordercolor="#2B3850", font=dict(color=TEXT, size=12.5)),
         bargap=0.35,
     )
-    fig.update_xaxes(gridcolor=GRID, zerolinecolor=GRID, linecolor=GRID, tickfont=dict(color=AXIS_TEXT), title_font=dict(color=AXIS_TEXT))
-    fig.update_yaxes(gridcolor=GRID, zerolinecolor=GRID, linecolor=GRID, tickfont=dict(color=AXIS_TEXT), title_font=dict(color=AXIS_TEXT))
+    axis = dict(gridcolor=GRID, zerolinecolor=GRID, linecolor=GRID, tickfont=dict(color=AXIS_TEXT),
+                title_font=dict(color=AXIS_TEXT), automargin=True, ticklabelstandoff=6)
+    fig.update_xaxes(**axis)
+    fig.update_yaxes(**axis)
     return fig
 
 
