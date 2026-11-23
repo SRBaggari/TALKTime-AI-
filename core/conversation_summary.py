@@ -137,6 +137,14 @@ def key_points(segments: list[TranscriptSegment], topics: list[dict], max_points
     return [dict(s, score=round(sc, 2)) for sc, _, s in sorted(top, key=lambda x: x[1])]
 
 
+_LABEL = re.compile(r"\bSpeaker \d+\b")
+
+
+def with_display_names(text: str, names: dict[str, str]) -> str:
+    """Replace stable labels ("Speaker 2") in stored text with user-chosen display names."""
+    return _LABEL.sub(lambda m: names.get(m.group(0), m.group(0)), text or "")
+
+
 def build_summary(stats: dict, topics: list[dict], questions: dict, insights: dict, participation: dict) -> str:
     """Deterministic, fact-based overview built only from measured/extracted results."""
     st = stats["speaking"]

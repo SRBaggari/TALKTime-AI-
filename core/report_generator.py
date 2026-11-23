@@ -16,6 +16,7 @@ from reportlab.lib.units import mm
 from reportlab.platypus import (KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle)
 
 import config
+from core.conversation_summary import with_display_names
 from utils.time_formatter import format_duration, format_percent, format_timestamp
 
 INK = colors.HexColor("#0F172A")
@@ -162,7 +163,7 @@ def generate_pdf(data: dict, output_path: Path, include_transcript: bool = True)
 
     # Summary
     story.append(Paragraph("Analysis summary", st["h2"]))
-    story.append(P(m.get("summary", "")))
+    story.append(P(with_display_names(m.get("summary", ""), names)))
     if (m.get("llm_summary") or {}).get("text"):
         story.append(Paragraph("Local LLM summary (Ollama — generated, may contain errors)", st["h3"]))
         story.append(P(m["llm_summary"]["text"]))
@@ -226,7 +227,7 @@ def generate_pdf(data: dict, output_path: Path, include_transcript: bool = True)
     score = pa.get("balance_score")
     story.append(P(f"Balance score: {score:.2f} — {pa.get('balance_label')}" if score is not None else pa.get("balance_label", "")))
     for w in pa.get("warnings", []):
-        story.append(P("• " + w))
+        story.append(P("• " + with_display_names(w, names)))
     story.append(P(pa.get("method", ""), "small"))
     story.append(P(pa.get("caveat", ""), "small"))
 

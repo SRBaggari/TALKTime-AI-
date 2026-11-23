@@ -98,3 +98,10 @@ def test_topics_and_key_points():
 def test_ollama_refuses_remote_url():
     r = ollama_status("http://example.com:11434")
     assert r["available"] is False and "local" in r["reason"].lower()
+
+
+def test_display_names_substituted_without_prefix_collisions():
+    from core.conversation_summary import with_display_names
+
+    names = {"Speaker 1": "Arjun", "Speaker 10": "Zoe"}
+    assert with_display_names("Speaker 1 and Speaker 10 spoke; Speaker 2 too.", names) == "Arjun and Zoe spoke; Speaker 2 too."
