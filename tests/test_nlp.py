@@ -105,3 +105,17 @@ def test_display_names_substituted_without_prefix_collisions():
 
     names = {"Speaker 1": "Arjun", "Speaker 10": "Zoe"}
     assert with_display_names("Speaker 1 and Speaker 10 spoke; Speaker 2 too.", names) == "Arjun and Zoe spoke; Speaker 2 too."
+
+
+def test_topic_recurrence_detects_revisited_topics():
+    from core.conversation_summary import topic_recurrence
+
+    segs = [tseg(0, 5, "Let's discuss the budget first.", "Speaker 1"),
+            tseg(6, 10, "The budget is tight.", "Speaker 2"),
+            tseg(200, 205, "Back to the budget question.", "Speaker 1"),
+            tseg(210, 215, "The hiring plan is ready.", "Speaker 2")]
+    rec = {r["topic"]: r for r in topic_recurrence(segs, [{"topic": "budget"}, {"topic": "hiring plan"}], gap=60)}
+    assert rec["budget"]["revisited"] and len(rec["budget"]["episodes"]) == 2
+    assert rec["budget"]["episodes"][0]["mentions"] == 2
+    assert rec["budget"]["episodes"][0]["speakers"] == ["Speaker 1", "Speaker 2"]
+    assert not rec["hiring plan"]["revisited"]
