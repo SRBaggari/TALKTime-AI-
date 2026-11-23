@@ -111,7 +111,22 @@ default_title = Path(uploaded.name).stem.replace("_", " ")[:80] if uploaded else
 title = c1.text_input("Title", value=default_title, max_chars=200, placeholder="e.g. Customer onboarding call")
 lang_codes = list(SUPPORTED_LANGUAGES)
 language = c2.selectbox("Language", lang_codes, index=lang_codes.index(s.default_language) if s.default_language in lang_codes else 0,
-                        format_func=SUPPORTED_LANGUAGES.get, help="Auto-detect works well; fixing the language avoids misdetection on short clips.")
+                        format_func=lambda c: SUPPORTED_LANGUAGES[c] + ("" if c == "auto" else f"  ({c})"),
+                        help=f"{len(SUPPORTED_LANGUAGES) - 1} languages supported by Whisper (English, Telugu, Hindi and Tamil "
+                             "listed first). Languages not in this list are not supported. Speech is always transcribed in "
+                             "the language spoken — never translated.")
+multilingual = False
+if language == "auto":
+    multilingual = st.toggle("Mixed languages / code-switching (e.g. Telugu–English)", value=False,
+                             help="Re-detects the language for each segment instead of once for the whole file. "
+                                  "Slower, but handles conversations that switch between languages.")
+else:
+    from core.language_utils import feature_support
+
+    missing = [k for k, v in feature_support(language).items() if not v]
+    if missing:
+        st.caption("For this language, sentiment, spaCy topics and English phrase rules are switched off; "
+                   "transcription, speaker analytics, keyword topics and '?' questions work normally.")
 description = st.text_area("Notes (optional)", max_chars=1000, height=70)
 
 section("Speakers")
@@ -163,9 +178,12 @@ if start and uploaded is not None:
     rid = repository.create_recording(
         title=(title or Path(uploaded.name).stem)[:200], description=description or None,
         original_filename=Path(uploaded.name).name[:255], stored_path=str(path), file_size=len(data),
-        diarization_mode=mode, status="pending")
+        diarization_mode=mode, status="pending",
+        options={"language": None if language == "auto" else language, "multilingual": multilingual,
+                 "num_speakers": int(num) if num else None, "min_speakers": lo_v, "max_speakers": hi_v})
     options = AnalysisOptions(language=None if language == "auto" else language, num_speakers=int(num) if num else None,
-                              min_speakers=lo_v, max_speakers=hi_v, diarization_mode=mode, settings=s)
+                              min_speakers=lo_v, max_speakers=hi_v, diarization_mode=mode, settings=s,
+                              multilingual=multilingual)
     try:
         JobManager.start(rid, options)
     except AnalysisError as exc:
@@ -184,10 +202,17 @@ if failed:
         with st.container(border=True):
             c1, c2, c3 = st.columns([4, 1, 1])
             c1.markdown(f"**{r['title']}**")
-            c1.caption((r["error"] or "Unknown error").splitlines()[0][:200])
+            c1.caption((r["error"] or "Unknown error").splitlines()[0][:300])
+            hint = (r.get("model_info") or {}).get("hint")
+            if hint:
+                c1.caption(f"Failed during {(r.get('model_info') or {}).get('failed_stage', '?')} · {hint}")
             if c2.button("Retry", key=f"retry_{r['id']}", width="stretch", disabled=not r["stored_path"]):
                 try:
-                    opts = AnalysisOptions(diarization_mode=r["diarization_mode"] if diar_ok else "single", settings=s)
+                    prev = r.get("options") or {}
+                    opts = AnalysisOptions(diarization_mode=r["diarization_mode"] if diar_ok else "single", settings=s,
+                                           language=prev.get("language"), multilingual=bool(prev.get("multilingual")),
+                                           num_speakers=prev.get("num_speakers"), min_speakers=prev.get("min_speakers"),
+                                           max_speakers=prev.get("max_speakers"))
                     JobManager.start(r["id"], opts)
                     st.session_state.active_job = r["id"]
                     st.session_state.job_options = opts
