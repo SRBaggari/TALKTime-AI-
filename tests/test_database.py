@@ -109,3 +109,29 @@ def test_retention_deletes_old(clean_db):
 def test_save_upload_rejects_invalid(clean_db):
     path, result = storage_service.save_upload("x.exe", b"MZ" + b"\x00" * 100, 10)
     assert not result.ok and path == Path()
+
+
+def test_migration_adds_missing_columns_without_losing_data(tmp_path):
+    import sqlite3
+
+    from sqlalchemy import create_engine, inspect
+
+    from database.db import migrate_sqlite
+    from database.models import Base
+
+    path = tmp_path / "old.db"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE transcript_segments (id INTEGER PRIMARY KEY, recording_id VARCHAR(32), speaker_label VARCHAR(50), "
+                "start FLOAT, \"end\" FLOAT, text TEXT)")
+    con.execute("INSERT INTO transcript_segments (recording_id, start, \"end\", text) VALUES ('r1', 0, 1, 'kept')")
+    con.commit()
+    con.close()
+    engine = create_engine(f"sqlite:///{path.as_posix()}")
+    Base.metadata.create_all(engine)  # creates other tables, leaves the old one untouched
+    added = migrate_sqlite(engine)
+    cols = {c["name"] for c in inspect(engine).get_columns("transcript_segments")}
+    assert {"language", "original_text", "uncertain"} <= cols
+    assert "transcript_segments.language" in added
+    with engine.connect() as c:
+        assert c.exec_driver_sql("SELECT text FROM transcript_segments").scalar() == "kept"
+    assert migrate_sqlite(engine) == []  # idempotent

@@ -96,3 +96,81 @@ def test_fixed_language_disables_per_segment_detection():
     finally:
         te.TranscriptionEngine._models.clear()
     assert model.transcribe.call_args.kwargs["multilingual"] is False
+
+
+# ---------------------------------------------------------------- script normalisation
+
+def test_devanagari_telugu_is_restored_to_telugu_script():
+    from core.transliteration import normalize_script
+
+    text, original = normalize_script("मार्केटिंग खर्चु चाला एक्कुवगा उंदी।", "te")
+    assert original == "मार्केटिंग खर्चु चाला एक्कुवगा उंदी।"
+    assert next(iter(lu.script_profile(text))) == "Telugu"
+    assert text.startswith("మార్కే") and text.endswith("।")
+
+
+def test_hindi_and_english_never_transliterated():
+    from core.transliteration import normalize_script
+
+    assert normalize_script("नमस्ते दोस्तों", "hi") == ("नमस्ते दोस्तों", None)
+    assert normalize_script("hello there", "te") == ("hello there", None)
+
+
+def test_tamil_fallbacks_never_leave_devanagari():
+    from core.transliteration import devanagari_to
+
+    out = devanagari_to("गांधी बजट घर", "ta")
+    assert not any(0x0900 <= ord(c) <= 0x097F for c in out)
+    assert lu.script_profile(out) == {"Tamil": 1.0}
+
+
+# ---------------------------------------------------------------- per-region code-switching
+
+def test_build_chunks_pads_splits_and_keeps_timeline():
+    chunks = te.build_chunks([(1.0, 2.0), (2.3, 3.0), (10.0, 70.0)], duration=80.0)
+    assert chunks[0] == (0.8, 2.2) and chunks[1][0] == 2.2  # no overlap after padding
+    assert all(e - s <= te.MAX_CHUNK_SECONDS + 1e-9 for s, e in chunks)
+    assert chunks[-1][1] == pytest.approx(70.2)
+
+
+def test_region_mode_detects_language_per_region_and_offsets_time():
+    model = mock.Mock()
+    model.detect_language.side_effect = [
+        ("te", 0.9, [("te", 0.9), ("en", 0.08)]),   # whole recording
+        ("te", 0.95, []), ("en", 0.97, []),          # region 1, region 2
+    ]
+
+    def fake_transcribe(piece, language=None, **kw):
+        text = "मनं एमी चेयाली" if language == "te" else "Please send the report."
+        seg = SimpleNamespace(start=0.1, end=1.5, text=text, avg_logprob=-0.2, no_speech_prob=0.01, words=[])
+        return iter([seg]), SimpleNamespace(language=language)
+
+    model.transcribe.side_effect = fake_transcribe
+    eng = te.TranscriptionEngine("small", "int8", 2)
+    te.TranscriptionEngine._models[eng.key] = model
+    try:
+        r = eng.transcribe(np.zeros(16000 * 10, dtype=np.float32), multilingual=True, regions=[(1.0, 3.0), (5.0, 8.0)])
+    finally:
+        te.TranscriptionEngine._models.clear()
+    assert [s.language for s in r.segments] == ["te", "en"]
+    assert r.segments[0].start == pytest.approx(0.8 + 0.1) and r.segments[1].start == pytest.approx(4.8 + 0.1)
+    assert next(iter(lu.script_profile(r.segments[0].text))) == "Telugu"  # Devanagari output restored
+    assert r.segments[0].original_text == "मनं एमी चेयाली" and r.transliterated_segments == 1
+    assert set(r.language_distribution) == {"te", "en"} and r.language == "en"  # en region is longer
+    rep = lu.summarize_languages(r.segments, r.language)
+    assert set(rep["languages_spoken"]) == {"te", "en"} and rep["code_switching"]
+    assert rep["transliterated_segments"] == 1
+
+
+def test_short_region_uses_recording_language():
+    model = mock.Mock()
+    model.detect_language.return_value = ("hi", 0.8, [("hi", 0.8)])
+    model.transcribe.return_value = (iter([]), SimpleNamespace(language="hi"))
+    eng = te.TranscriptionEngine("small", "int8", 2)
+    te.TranscriptionEngine._models[eng.key] = model
+    try:
+        eng.transcribe(np.zeros(16000 * 5, dtype=np.float32), multilingual=True, regions=[(1.0, 1.4)])
+    finally:
+        te.TranscriptionEngine._models.clear()
+    assert model.detect_language.call_count == 1  # only the recording-level detection
+    assert model.transcribe.call_args.kwargs["language"] == "hi"

@@ -120,3 +120,10 @@ def test_probe_reads_original_format(tmp_path):
     info = probe_audio(p)
     assert info["sample_rate"] == 22050 and info["channels"] == 2
     assert info["duration"] == pytest.approx(1.0, abs=0.01)
+
+
+def test_digital_silence_does_not_inflate_snr():
+    audio = np.concatenate([np.zeros(SR, dtype=np.float32), voiced(3.0, amp=0.3)])
+    q = analyze_quality(audio, SR, [(1.0, 4.0)])
+    assert q["digital_silence"] is True and q["noise_floor_dbfs"] == -90.0
+    assert q["snr_db"] < 100
