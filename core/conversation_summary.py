@@ -142,7 +142,7 @@ def build_summary(stats: dict, topics: list[dict], questions: dict, insights: di
     st = stats["speaking"]
     n = st["num_speakers"]
     parts = [f"This {format_duration(st['recording_duration'])} recording contains {n} detected speaker{'s' if n != 1 else ''}"]
-    if n and participation.get("dominant_speaker"):
+    if n >= 2 and participation.get("dominant_speaker"):
         dom = participation["dominant_speaker"]
         parts[-1] += f"; {dom} spoke the most ({participation['dominant_share'] * 100:.0f}% of speaking time)."
     else:
