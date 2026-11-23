@@ -7,7 +7,7 @@ from pathlib import Path
 import plotly.graph_objects as go
 import streamlit as st
 
-from core.language_utils import tag_segment
+from core.language_utils import language_name, tag_segment
 from core.transcript_search import highlight, search_segments
 from core.transcription_engine import is_low_confidence
 from services.analysis_service import reassign_segment
@@ -150,6 +150,9 @@ page = st.number_input(f"Page (of {pages}) · {len(rows)} lines", 1, pages, min(
 current_t = seek["start"]
 
 
+multi_lang = len({t.language for t in transcript if t.language}) > 1
+
+
 def confidence_badge(t) -> str:
     """Alignment confidence: share of diarized speech under the line belonging to the assigned speaker."""
     if t.speaker in (None, "Unknown"):
@@ -177,6 +180,11 @@ with st.container(border=True):
         tag = tag_segment(t.text)
         if tag["code_switch"]:
             flags += f' <span class="tt-row-sub">· mixed scripts: {escape(" + ".join(tag["scripts"]))}</span>'
+        if multi_lang and t.language:
+            flags += f' <span class="tt-row-sub">· {escape(language_name(t.language))}</span>'
+        if t.original_text:
+            flags += (f' <span class="tt-row-sub" title="{escape(t.original_text)}">· script converted from '
+                      'Devanagari</span>')
         if data["transcript_corrected"][i]:
             flags += ' <span class="tt-row-sub">· corrected</span>'
         c2.markdown(

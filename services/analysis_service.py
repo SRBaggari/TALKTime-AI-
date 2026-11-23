@@ -32,7 +32,7 @@ from core.sentiment_analysis import analyze_sentiment
 from core.silence_detection import acoustic_silence, analyze_silence
 from core.speaker_alignment import align
 from core.speaking_time import build_turns, compute_speaking_time
-from core.transcription_engine import TranscriptionEngine
+from core.transcription_engine import TranscriptionEngine, model_advice
 from core.types import SpeakerSegment, TranscriptSegment
 from core.vad import compare_with_diarization, detect_speech
 from database import repository
@@ -293,6 +293,7 @@ def run_analysis(recording_id: str, options: AnalysisOptions, progress=lambda f,
                                   language_probs=tr.language_probs)
         metrics["language"]["multilingual_mode"] = tr.multilingual
         metrics["language"]["region_language_seconds"] = tr.language_distribution
+        metrics["language"]["model_advice"] = model_advice(tr.language, s.whisper_model)
         metrics["language"]["selected"] = options.language or "auto"
         timings["analytics"] = time.perf_counter() - t
         del audio

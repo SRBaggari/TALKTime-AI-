@@ -123,6 +123,11 @@ if language == "auto":
 else:
     from core.language_utils import feature_support
 
+    from core.transcription_engine import model_advice
+
+    advice = model_advice(language, s.whisper_model)
+    if advice:
+        st.warning(advice, icon=":material/tips_and_updates:")
     missing = [k for k, v in feature_support(language).items() if not v]
     if missing:
         st.caption("For this language, sentiment, spaCy topics and English phrase rules are switched off; "

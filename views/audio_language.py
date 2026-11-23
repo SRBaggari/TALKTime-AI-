@@ -118,6 +118,11 @@ else:
                     unsafe_allow_html=True)
         st.caption(("Language was set manually" if sel and sel != "auto" else "Automatic detection") +
                    (" · per-segment (multilingual) mode" if lang.get("multilingual_mode") else ""))
+        if lang.get("model_advice"):
+            st.warning(lang["model_advice"], icon=":material/tips_and_updates:")
+        if lang.get("transliterated_segments"):
+            st.caption(f"{lang['transliterated_segments']} line(s) were written by Whisper in Devanagari and converted to "
+                       "the native script (original text kept).")
         if prob is not None and prob < 0.6:
             st.warning("Language confidence is low. If the transcript looks wrong, re-run with the language set manually.")
     with right:
@@ -129,6 +134,17 @@ else:
             fig.update_yaxes(autorange="reversed")
             fig.update_xaxes(range=[0, 100], ticksuffix="%", title="Whisper language probability")
             st.plotly_chart(style_fig(fig, 60 + 34 * len(tp), legend=False), width="stretch", theme=None, config=PLOTLY_CONFIG)
+    spoken = lang.get("languages_spoken") or {}
+    if len(spoken) > 1 or lang.get("multilingual_mode"):
+        st.markdown("**Languages spoken** (seconds of transcribed speech per language, detected per speech region)")
+        fig = go.Figure(go.Bar(y=[v["name"] for v in spoken.values()], x=[v["share"] * 100 for v in spoken.values()],
+                               orientation="h", marker=dict(color="#199E70", cornerradius=4),
+                               customdata=[v["seconds"] for v in spoken.values()],
+                               hovertemplate="%{y}: %{x:.0f}% (%{customdata:.0f}s)<extra></extra>"))
+        fig.update_yaxes(autorange="reversed")
+        fig.update_xaxes(range=[0, 100], ticksuffix="%")
+        st.plotly_chart(style_fig(fig, 60 + 34 * len(spoken), legend=False), width="stretch", theme=None,
+                        config=PLOTLY_CONFIG)
     mix = lang.get("script_mix") or {}
     if mix:
         st.markdown("**Writing scripts in the transcript** (each word's Unicode script)")
