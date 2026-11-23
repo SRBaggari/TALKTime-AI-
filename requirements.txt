@@ -1,0 +1,34 @@
+# TalkTime AI — runtime dependencies (Python 3.11/3.12 recommended on Windows)
+# Install CPU-only PyTorch first to avoid pulling multi-GB CUDA wheels:
+#   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+# UI
+streamlit>=1.40
+plotly>=5.22
+
+# Audio
+numpy>=1.26
+soundfile>=0.12
+librosa>=0.10
+
+# AI / ML (local inference)
+torch>=2.8
+torchaudio>=2.8
+pyannote.audio>=4.0
+faster-whisper>=1.1
+huggingface_hub>=0.25
+
+# NLP (local)
+spacy>=3.7
+vaderSentiment>=3.3.2
+
+# Data / storage / reporting
+pandas>=2.2
+SQLAlchemy>=2.0
+reportlab>=4.2
+kaleido==0.2.1
+python-dotenv>=1.0
+requests>=2.31
+
+# Testing
+pytest>=8.0

@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Secrets — never commit
+.env
+.streamlit/secrets.toml
+
+# Local data (recordings, database, reports, logs)
+data/
+!data/.gitkeep
+
+# Local model files
+models/*
+!models/README.md
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
