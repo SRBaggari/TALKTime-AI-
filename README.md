@@ -210,7 +210,7 @@ Set `TALKTIME_DATA_DIR` in `.env` to store data elsewhere. Audio is never stored
 |---|---|
 | "Diarization model missing" | Follow *Hugging Face model access*. A 401/403 error means the conditions weren't accepted with the token's account. |
 | "Could not decode audio" | Install FFmpeg, or convert the file to WAV. The file may be corrupted. |
-| Analysis is slow | Use Whisper `base`, lower the beam size, or raise CPU threads in Settings. Measured on a Ryzen 7 5800H: a 50 s MP3 took 13–16 s end to end with Whisper `small` (diarization not included). Diarization adds more time. |
+| Analysis is slow | Use Whisper `base`, lower the beam size, or raise CPU threads in Settings. Measured on a Ryzen 7 5800H with a 50 s, 3-speaker MP3: about 58 s end to end (transcription ~12 s with Whisper `small`, diarization ~43 s). Diarization is the slowest stage on CPU. |
 | High memory use | Settings → Processing → untick *Keep models in memory*, or use **Release loaded models**. |
 | `pip` fails installing torch | Use Python 3.11/3.12 and the CPU index URL shown above. |
 | Port already in use | `streamlit run app.py --server.port 8502` |
