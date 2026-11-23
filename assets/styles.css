@@ -118,3 +118,6 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div { border-color: var(--tt-b
   .tt-metric-value { font-size: 22px; }
   .block-container { padding-left: 1rem; padding-right: 1rem; }
 }
+
+/* Search highlights */
+mark { background: rgba(201, 133, 0, .35); color: #FDE68A; border-radius: 3px; padding: 0 2px; }

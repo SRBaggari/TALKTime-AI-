@@ -7,9 +7,11 @@ from pathlib import Path
 import plotly.graph_objects as go
 import streamlit as st
 
+from core.language_utils import tag_segment
+from core.transcript_search import highlight, search_segments
 from core.transcription_engine import is_low_confidence
 from services.analysis_service import reassign_segment
-from ui.components import (PLOTLY_CONFIG, chip, load, names_and_colors, note, page_header, recording_picker, section,
+from ui.components import (PLOTLY_CONFIG, badge, chip, load, names_and_colors, note, page_header, recording_picker, section,
                            style_fig)
 from utils.time_formatter import format_timestamp
 
@@ -118,38 +120,69 @@ if not transcript:
 c1, c2, c3 = st.columns([2, 2, 1])
 spk_filter = c1.multiselect("Speakers", labels + (["Unknown"] if any(t.speaker == "Unknown" for t in transcript) else []),
                             format_func=lambda l: names.get(l, l), placeholder="All speakers")
-query = c2.text_input("Search transcript", placeholder="Find words…")
+query = c2.text_input("Search transcript", placeholder='words, "exact phrase" or a time like 1:23',
+                      help="All words must appear. Quotes match a phrase. A timestamp jumps to the line spoken then.")
 only_uncertain = c3.toggle("Uncertain only")
-rows = [(i, t) for i, t in enumerate(transcript)
-        if (not spk_filter or t.speaker in spk_filter) and (not query or query.lower() in t.text.lower())
-        and (not only_uncertain or t.uncertain)]
+res = search_segments(transcript, query, speakers=spk_filter or None)
+terms = res["terms"]
+if res["mode"] == "timestamp":
+    if res["indices"]:
+        target_i = res["indices"][0]
+        if st.session_state.get("ts_jump") != (rid, query):
+            st.session_state.ts_jump = (rid, query)
+            set_seek(res["time"], None)
+            st.rerun()
+        st.caption(f"Line spoken at {format_timestamp(res['time'], True)} — playing from that moment.")
+        rows = [(i, transcript[i]) for i in range(max(0, target_i - 3), min(len(transcript), target_i + 7))]
+    else:
+        st.info("No speech at that time.")
+        rows = []
+else:
+    rows = [(i, transcript[i]) for i in res["indices"] if not only_uncertain or transcript[i].uncertain]
+    if query:
+        st.caption(f"{len(rows)} matching line(s).")
 PAGE = 40
 pages = max(1, (len(rows) + PAGE - 1) // PAGE)
-page = st.number_input(f"Page (of {pages}) · {len(rows)} lines", 1, pages, 1) if pages > 1 else 1
+# Open the page that contains the line currently playing.
+playing_idx = next((k for k, (_, t) in enumerate(rows) if t.start <= seek["start"] < t.end), 0) if seek["start"] > 0 else 0
+default_page = playing_idx // PAGE + 1
+page = st.number_input(f"Page (of {pages}) · {len(rows)} lines", 1, pages, min(default_page, pages)) if pages > 1 else 1
 current_t = seek["start"]
+
+
+def confidence_badge(t) -> str:
+    """Alignment confidence: share of diarized speech under the line belonging to the assigned speaker."""
+    if t.speaker in (None, "Unknown"):
+        return badge("no speaker", "bad")
+    kind = "ok" if t.speaker_confidence >= 0.9 and not t.uncertain else "warn" if t.speaker_confidence >= 0.6 else "bad"
+    return badge(f"{t.speaker_confidence:.0%} speaker match", kind)
+
 
 with st.container(border=True):
     for i, t in rows[(page - 1) * PAGE: page * PAGE]:
         color = colors.get(t.speaker, "#64748B")
         playing = t.start <= current_t < t.end and seek["start"] > 0
         c1, c2, c3 = st.columns([1.5, 8.5, 1.5], vertical_alignment="top")
-        if c1.button(format_timestamp(t.start), key=f"seek_{rid}_{i}", icon=":material/play_arrow:", width="stretch", help="Play this segment",
-                     type="primary" if playing else "secondary"):
+        if c1.button(format_timestamp(t.start), key=f"seek_{rid}_{i}", icon=":material/play_arrow:", width="stretch",
+                     help="Play this segment", type="primary" if playing else "secondary"):
             set_seek(t.start, t.end)
             st.rerun()
-        flags = ""
+        flags = " " + confidence_badge(t)
         if t.uncertain:
-            flags += f'<span class="tt-uncertain">⚠ uncertain speaker ({t.speaker_confidence:.0%})</span>'
+            flags += ' <span class="tt-uncertain">⚠ uncertain speaker</span>'
         if t.overlapping_speakers:
             flags += f' <span class="tt-row-sub">· overlaps {escape(", ".join(names.get(o, o) for o in t.overlapping_speakers))}</span>'
         if is_low_confidence(t):
             flags += ' <span class="tt-row-sub">· low transcription confidence</span>'
+        tag = tag_segment(t.text)
+        if tag["code_switch"]:
+            flags += f' <span class="tt-row-sub">· mixed scripts: {escape(" + ".join(tag["scripts"]))}</span>'
         if data["transcript_corrected"][i]:
             flags += ' <span class="tt-row-sub">· corrected</span>'
         c2.markdown(
             f'<div class="tt-seg" style="border-left-color:{color}"><div class="tt-seg-head">'
             f'{chip(names.get(t.speaker, t.speaker or "Unknown"), color)}<span>{format_timestamp(t.start, True)} – '
-            f'{format_timestamp(t.end, True)}</span>{flags}</div><div class="tt-seg-text">{escape(t.text)}</div></div>',
+            f'{format_timestamp(t.end, True)}</span>{flags}</div><div class="tt-seg-text">{highlight(t.text, terms)}</div></div>',
             unsafe_allow_html=True)
         with c3.popover("Correct", icon=":material/edit:", width="stretch"):
             st.caption("Attribute this line (and its time span) to another speaker.")
