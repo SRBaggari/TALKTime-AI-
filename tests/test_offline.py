@@ -67,3 +67,19 @@ def test_validators():
             assert False
         except ValueError:
             pass
+
+
+def test_cached_snapshot_accepts_partial_repo_with_required_files(tmp_path):
+    """faster-whisper never downloads README/.gitattributes — the model must still count as installed."""
+    from core.model_cache import cached_snapshot
+
+    repo = tmp_path / "models--Systran--faster-whisper-small"
+    snap = repo / "snapshots" / "abc123"
+    snap.mkdir(parents=True)
+    (repo / "refs").mkdir()
+    (repo / "refs" / "main").write_text("abc123")
+    for f in ("model.bin", "config.json"):
+        (snap / f).write_text("x")
+    assert cached_snapshot("Systran/faster-whisper-small", ["model.bin", "config.json"], tmp_path) == snap
+    assert cached_snapshot("Systran/faster-whisper-small", ["model.bin", "tokenizer.json"], tmp_path) is None
+    assert cached_snapshot("Systran/faster-whisper-tiny", ["model.bin"], tmp_path) is None

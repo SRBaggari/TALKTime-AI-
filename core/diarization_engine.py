@@ -42,13 +42,9 @@ def local_diarization_path() -> Path | None:
     override = os.environ.get("TALKTIME_DIARIZATION_PATH")
     if override and (Path(override) / "config.yaml").is_file():
         return Path(override)
-    try:
-        from huggingface_hub import snapshot_download
+    from core.model_cache import cached_snapshot
 
-        path = Path(snapshot_download(config.DIARIZATION_MODEL_ID, local_files_only=True))
-        return path if (path / "config.yaml").is_file() else None
-    except Exception:
-        return None
+    return cached_snapshot(config.DIARIZATION_MODEL_ID, ["config.yaml"])
 
 
 def is_diarization_available() -> bool:

@@ -25,13 +25,14 @@ def whisper_repo(size: str) -> str:
     return config.WHISPER_REPO_TEMPLATE.format(size=size)
 
 
-def local_whisper_path(size: str) -> str | None:
-    try:
-        from huggingface_hub import snapshot_download
+WHISPER_REQUIRED_FILES = ["model.bin", "config.json", "tokenizer.json"]
 
-        return snapshot_download(whisper_repo(size), local_files_only=True)
-    except Exception:
-        return None
+
+def local_whisper_path(size: str) -> str | None:
+    from core.model_cache import cached_snapshot
+
+    snap = cached_snapshot(whisper_repo(size), WHISPER_REQUIRED_FILES)
+    return str(snap) if snap else None
 
 
 def is_whisper_available(size: str) -> bool:

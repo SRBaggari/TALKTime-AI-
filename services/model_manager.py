@@ -98,11 +98,12 @@ def offline_ready(checks: list[CheckResult]) -> bool:
 # --------------------------------------------------------------------------- downloads (one-time, needs internet)
 
 def download_whisper(size: str) -> str:
-    from huggingface_hub import snapshot_download
+    """Download only the files faster-whisper needs (same as its own downloader)."""
+    from faster_whisper.utils import download_model
 
     if size not in config.WHISPER_SIZES:
         raise ValueError(size)
-    return snapshot_download(whisper_repo(size))
+    return download_model(size)
 
 
 def download_diarization() -> str:
