@@ -50,6 +50,28 @@ def delete_recording(recording_id: str) -> int:
     return delete_recording_files(repository.delete_recording(recording_id))
 
 
+def delete_reports(recording_id: str) -> int:
+    """Delete generated report files for a recording (recording and analysis are kept)."""
+    return delete_recording_files(repository.delete_reports(recording_id))
+
+
+def delete_original_audio(recording_id: str) -> bool:
+    """Delete the original upload; the processed WAV used for playback is kept."""
+    rec = repository.get_recording(recording_id)
+    if not rec or not rec.get("stored_path"):
+        return False
+    removed = delete_recording_files([rec["stored_path"]]) > 0
+    repository.update_recording(recording_id, stored_path=None)
+    return removed
+
+
+def delete_transcripts_and_analysis(recording_id: str) -> int:
+    """Delete transcript, speakers, analytics and reports but keep the audio for re-analysis."""
+    n = delete_reports(recording_id)
+    repository.delete_analysis_data(recording_id)
+    return n
+
+
 def delete_all_data() -> int:
     n = delete_recording_files(repository.delete_all_recordings())
     for d in (config.TEMP_DIR,):

@@ -86,6 +86,29 @@ def get_hf_token() -> str | None:
     return None
 
 
+def mask_token(token: str | None) -> str:
+    """Show only enough of a secret to recognise it: 'hf_…EqsV'."""
+    if not token:
+        return "not set"
+    return f"{token[:3]}…{token[-4:]}" if len(token) > 10 else "set"
+
+
+def remove_hf_token_from_env_file(env_path: Path | None = None) -> bool:
+    """Remove HF_TOKEN lines from the local .env (the token is only needed for the one-time download)."""
+    env_path = env_path or (BASE_DIR / ".env")
+    if not env_path.is_file():
+        return False
+    lines = env_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    keys = ("HF_TOKEN", "HUGGINGFACE_TOKEN", "HUGGING_FACE_HUB_TOKEN")
+    kept = [ln for ln in lines if not ln.strip().split("=", 1)[0].strip() in keys]
+    if len(kept) == len(lines):
+        return False
+    env_path.write_text("".join(kept), encoding="utf-8")
+    for k in keys:
+        os.environ.pop(k, None)
+    return True
+
+
 @dataclass
 class AppSettings:
     """User-adjustable settings (persisted in SQLite ``app_settings``)."""

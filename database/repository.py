@@ -190,6 +190,69 @@ def rename_speaker(recording_id: str, label: str, display_name: str) -> None:
         sp.display_name = display_name
 
 
+# --------------------------------------------------------------------------- search
+
+def search_transcripts(query: str, recording_ids: list[str] | None = None, speaker_name: str | None = None,
+                       limit: int = 300) -> list[dict]:
+    """Full-text search across analysed recordings.
+
+    Speaker filtering uses each recording's own display names — speakers are
+    never assumed to be the same person across recordings.
+    """
+    from core.transcript_search import matches, parse_query
+
+    terms = parse_query(query)
+    with session_scope() as s:
+        q = (select(TranscriptSegmentRow, Recording.title, Recording.created_at)
+             .join(Recording, Recording.id == TranscriptSegmentRow.recording_id)
+             .where(Recording.status == "completed"))
+        if recording_ids:
+            q = q.where(TranscriptSegmentRow.recording_id.in_(recording_ids))
+        if terms:  # SQL pre-filter on the longest term, exact (Unicode case-folded) match in Python
+            q = q.where(TranscriptSegmentRow.text.ilike(f"%{max(terms, key=len)}%"))
+        q = q.order_by(Recording.created_at.desc(), TranscriptSegmentRow.start)
+        names = {}
+        out = []
+        for row, title, created in s.execute(q):
+            if terms and not matches(row.text, terms):
+                continue
+            if row.recording_id not in names:
+                names[row.recording_id] = {sp.label: sp.display_name for sp in
+                                           s.scalars(select(Speaker).where(Speaker.recording_id == row.recording_id))}
+            disp = names[row.recording_id].get(row.speaker_label, row.speaker_label or "Unknown")
+            if speaker_name and speaker_name.casefold() not in disp.casefold():
+                continue
+            out.append({"recording_id": row.recording_id, "title": title, "created_at": created,
+                        "speaker_label": row.speaker_label, "speaker_name": disp, "start": row.start,
+                        "end": row.end, "text": row.text, "uncertain": row.uncertain})
+            if len(out) >= limit:
+                break
+        return out
+
+
+# --------------------------------------------------------------------------- privacy
+
+def delete_reports(recording_id: str) -> list[str]:
+    """Remove report rows; return their file paths for deletion."""
+    with session_scope() as s:
+        rows = list(s.scalars(select(Report).where(Report.recording_id == recording_id)))
+        paths = [r.path for r in rows]
+        for r in rows:
+            s.delete(r)
+        return paths
+
+
+def delete_analysis_data(recording_id: str) -> None:
+    """Delete transcripts, speakers, segments, insights and analytics but keep the recording entry/audio."""
+    with session_scope() as s:
+        for model in (Speaker, SpeakerSegmentRow, TranscriptSegmentRow, ConversationInsight, AnalysisResult):
+            s.execute(delete(model).where(model.recording_id == recording_id))
+        rec = s.get(Recording, recording_id)
+        if rec:
+            rec.status = "pending"
+            rec.num_speakers = 0
+
+
 # --------------------------------------------------------------------------- dashboard
 
 def dashboard_stats() -> dict:
