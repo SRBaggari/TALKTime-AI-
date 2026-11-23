@@ -21,6 +21,12 @@ ProgressCallback = Callable[[float, str], None]
 # Segments below this average log-probability are flagged as low confidence.
 LOW_CONFIDENCE_LOGPROB = -1.0
 NO_SPEECH_THRESHOLD = 0.6
+# Whisper's own hallucination signal: highly repetitive output compresses too well.
+COMPRESSION_RATIO_THRESHOLD = 2.4
+# Upper bound on tokens per second of audio for one decoding attempt (fast speech is ~4-6 tokens/s,
+# Indic scripts tokenise longer). Stops repetition loops from running to Whisper's maximum length.
+MAX_TOKENS_PER_SECOND = 12
+INDIC_LANGS = {"te", "ta", "kn", "ml", "bn", "gu", "pa", "mr", "hi", "ur", "or", "as", "ne", "si"}
 
 
 def whisper_repo(size: str) -> str:
@@ -42,7 +48,15 @@ def is_whisper_available(size: str) -> bool:
 
 
 def is_low_confidence(seg: TranscriptSegment) -> bool:
-    return seg.avg_logprob is not None and seg.avg_logprob < LOW_CONFIDENCE_LOGPROB
+    return (seg.avg_logprob is not None and seg.avg_logprob < LOW_CONFIDENCE_LOGPROB) or seg.text.startswith("[unclear]")
+
+
+def model_advice(language: str | None, model_size: str) -> str | None:
+    """Honest guidance: Whisper tiny/base/small are weak on Indic languages."""
+    if language in INDIC_LANGS and model_size in ("tiny", "base", "small"):
+        return (f"Whisper '{model_size}' is unreliable for {language}. Use 'medium' (Settings → Processing) for "
+                "noticeably better Telugu/Tamil/Hindi transcripts; it is slower and needs ~2.5 GB RAM.")
+    return None
 
 
 class TranscriptionEngine:
@@ -114,7 +128,9 @@ class TranscriptionEngine:
             native, original = normalize_script(text, lang)
             if original is not None:
                 converted += 1
-            if s.no_speech_prob is not None and s.no_speech_prob > NO_SPEECH_THRESHOLD and (s.avg_logprob or 0) < LOW_CONFIDENCE_LOGPROB:
+            no_speech = s.no_speech_prob is not None and s.no_speech_prob > NO_SPEECH_THRESHOLD and (s.avg_logprob or 0) < LOW_CONFIDENCE_LOGPROB
+            repetitive = (getattr(s, "compression_ratio", None) or 0) > COMPRESSION_RATIO_THRESHOLD
+            if no_speech or repetitive:
                 native = f"[unclear] {native}"
             words = [
                 Word(start=offset + float(w.start), end=offset + float(w.end),
@@ -191,7 +207,8 @@ class TranscriptionEngine:
                 lang, prob = g_lang, None  # too short to identify reliably → recording language
             else:
                 lang, prob, _ = model.detect_language(piece)
-            seg_iter, _info = model.transcribe(piece, language=lang, vad_filter=False, **common)
+            seg_iter, _info = model.transcribe(piece, language=lang, vad_filter=False,
+                                               max_new_tokens=int((e - s) * MAX_TOKENS_PER_SECOND) + 16, **common)
             segs, n = self._segments_from(seg_iter, s, lang, prob, duration, progress)
             segments += segs
             converted += n

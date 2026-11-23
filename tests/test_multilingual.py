@@ -174,3 +174,35 @@ def test_short_region_uses_recording_language():
         te.TranscriptionEngine._models.clear()
     assert model.detect_language.call_count == 1  # only the recording-level detection
     assert model.transcribe.call_args.kwargs["language"] == "hi"
+
+
+def test_repetitive_output_flagged_unclear():
+    model = mock.Mock()
+    loop = SimpleNamespace(start=0.0, end=2.0, text="ల్ల్ల్ల్ల్ల్ల్ల్ల్ల్ల్ల్", avg_logprob=-0.2, no_speech_prob=0.01,
+                           compression_ratio=11.9, words=[])
+    model.transcribe.return_value = (iter([loop]), SimpleNamespace(language="te", language_probability=0.9))
+    eng = te.TranscriptionEngine("small", "int8", 2)
+    te.TranscriptionEngine._models[eng.key] = model
+    try:
+        r = eng.transcribe(np.zeros(32000, dtype=np.float32), language="te")
+    finally:
+        te.TranscriptionEngine._models.clear()
+    assert r.segments[0].text.startswith("[unclear]") and te.is_low_confidence(r.segments[0])
+
+
+def test_region_decoding_is_length_bounded():
+    model = mock.Mock()
+    model.detect_language.return_value = ("en", 0.9, [("en", 0.9)])
+    model.transcribe.return_value = (iter([]), SimpleNamespace(language="en"))
+    eng = te.TranscriptionEngine("small", "int8", 2)
+    te.TranscriptionEngine._models[eng.key] = model
+    try:
+        eng.transcribe(np.zeros(16000 * 10, dtype=np.float32), multilingual=True, regions=[(1.0, 6.0)])
+    finally:
+        te.TranscriptionEngine._models.clear()
+    assert model.transcribe.call_args.kwargs["max_new_tokens"] == int(5.4 * te.MAX_TOKENS_PER_SECOND) + 16
+
+
+def test_model_advice_for_indic_languages():
+    assert "medium" in te.model_advice("te", "small")
+    assert te.model_advice("te", "medium") is None and te.model_advice("en", "small") is None
