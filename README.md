@@ -14,20 +14,27 @@ ever leaves the machine.
 | Area | What you get | How it is produced |
 |---|---|---|
 | Speaker diarization | Automatic speaker count (or exact/min/max), start–end times, overlapping speech kept | pyannote `speaker-diarization-community-1` (local) |
-| Transcription | Automatic language detection, word timestamps, punctuation, `[unclear]` flags | Faster-Whisper (CTranslate2, CPU int8) |
-| Speaker-wise transcript | Each line assigned by strongest timestamp overlap, at word level; uncertain lines flagged | Interval alignment |
+| Transcription | 99 languages (English, Telugu, Hindi, Tamil listed first), auto-detection with probabilities, manual selection, word timestamps, `[unclear]` flags for low-confidence or repetitive output; never translated | Faster-Whisper (CTranslate2, CPU int8) |
+| Code-switching | Each speech region gets its own language detection (e.g. Telugu ↔ English turns), per-line language tags, languages-spoken breakdown | VAD regions + Whisper language ID |
+| Native script | Telugu/Tamil/Kannada/… that Whisper writes in Devanagari is converted back to the native script (original kept) | Deterministic Unicode transliteration |
+| Audio quality | Score, speech level, noise floor, SNR, clipping, bandwidth, sample rate/channels, issues + recommendations | Measured on un-normalised audio |
+| Voice activity detection | Speech vs non-speech on the original timeline; quiet vs background-sound gaps; VAD↔diarization agreement; skips models when there is no speech | Silero VAD (bundled, local) with energy fallback |
+| Speaker-wise transcript | Each line assigned by strongest timestamp overlap, at word level; per-line and per-speaker assignment confidence; uncertain lines flagged | Interval alignment (pyannote gives no per-segment probability, so none is invented) |
 | Speaking time | Total, share of speech, share of recording, turns, average/longest/shortest turn, first/last spoke | Exact interval math |
 | Overlaps | Overlap events, *possible* interruptions, backchannels, simultaneous starts | Timing heuristics, conservative wording |
 | Silence | Total/longest/average silence, gaps between speakers, pauses within a speaker, response delays | Speech-activity gaps + acoustic energy check |
-| Participation | Balance score (normalised entropy), dominant speaker, neutral imbalance notes | Documented formula |
+| Participation | Balance (normalised entropy), Gini, dominance ratio, turns/min, response times, longest turn, dominance indicators | Documented formulas (shown in the app) |
 | Questions | Questions per speaker, likely responses, possibly unanswered questions, confidence | Heuristics |
 | Sentiment | Positive / neutral / negative per segment and speaker, trend over time (English) | VADER lexicon (text only) |
-| Conversation intelligence | Topics, key points, decisions, action items, commitments, important statements | spaCy + rule-based extraction |
+| Conversation intelligence | Topics, repeated topics (discussion episodes), key points, decisions, action items, commitments, important statements | spaCy + rule-based extraction (English); keyword topics for other languages |
+| Transcript search | Keywords, exact phrases, speaker name, timestamps (`1:23`) across all recordings; highlighted results; click to play | SQLite + Unicode matching |
 | Optional LLM summary | Abstractive summary | Your local Ollama (disabled by default, localhost only) |
 | Timeline | Speaker lanes, overlap and silence lanes, click to play, play an individual segment | Plotly + synced audio |
 | Corrections | Rename speakers, merge split speakers, reassign a transcript line; analytics recalculated | No re-transcription needed |
-| Comparison | Duration, balance, turn length, interruptions/min, silence, sentiment across recordings | Speakers never matched across calls |
-| Reports | PDF with charts, transcript and a limitations section; CSV and JSON exports | ReportLab, pandas |
+| Comparison | Duration, ranked speaking shares, balance, Gini, turn length, turns/min, interruptions/min, silence, pauses, response delay, sentiment, quality; historical trends | Speakers never matched across calls (no voiceprints stored) |
+| Reports | PDF (charts, quality, language, dynamics, processing, limitations); Excel workbook (11+ sheets incl. one per speaker); CSV; JSON; speaker-wise TXT; interactive offline HTML charts | ReportLab, openpyxl, Plotly |
+| Processing monitor | Live CPU/memory, real-time factor, time per stage, model load times, peak memory, failures with stage and recovery hint | psutil |
+| Privacy | Local-only indicator, typed confirmation for every deletion; delete recording / transcript+analysis / reports / original upload / everything; retention; masked token with one-click removal | — |
 | History | All analyses stored in SQLite; delete one recording or everything | SQLAlchemy |
 
 Every on-screen section is tagged either **Measured from audio** or **Inferred · NLP estimate**.
@@ -37,8 +44,8 @@ Every on-screen section is tagged either **Measured from audio** or **Inferred �
 ```
 app.py                     Streamlit entry point: navigation, startup checks, offline badge
 config.py                  Paths, defaults, speaker palette; disables telemetry before ML imports
-views/                     One file per page (Dashboard, Upload, Speaker Analysis, Timeline,
-                           Intelligence, Comparison, Reports, Settings)
+views/                     One file per page (Dashboard, Upload, Speaker Analysis, Timeline, Intelligence,
+                           Audio & Language, Transcript Search, Comparison, Reports, Processing Monitor, Settings)
 ui/components.py           Shared cards, tags, chart styling (all user text HTML-escaped)
 core/                      Pure processing modules (no UI)
   audio_validator.py         Extension allow-list, magic-byte sniffing, size limits
@@ -48,6 +55,12 @@ core/                      Pure processing modules (no UI)
   transcription_engine.py    Faster-Whisper (local cache only)
   model_cache.py             Finds cached models without network calls
   speaker_alignment.py       Word/segment ↔ speaker alignment with confidence
+  vad.py                     Voice activity detection, quiet vs background-sound classification
+  audio_quality.py           Levels, SNR, clipping, bandwidth, issues and recommendations
+  language_utils.py          Whisper languages, script detection, code-switch report, feature support
+  transliteration.py         Devanagari → native Indic script
+  transcript_search.py       Query parsing, timestamp search, safe highlighting
+  comparison.py              Cross-recording summaries and trends
   intervals.py               Union / intersection / subtraction / multi-coverage
   speaking_time.py, overlap_detection.py, interruption_analysis.py,
   silence_detection.py, participation_analysis.py,
@@ -56,14 +69,15 @@ services/
   analysis_service.py        Pipeline orchestration, background job runner, recompute after corrections
   model_manager.py           Model status, downloads, offline-readiness checks
   storage_service.py         Safe file storage, deletion, retention
-  export_service.py          CSV / JSON exports
+  export_service.py          CSV, JSON, XLSX, TXT and interactive HTML exports
+  resource_monitor.py        CPU / memory sampling during analysis
 database/                  SQLAlchemy models, session handling, repository
 scripts/download_models.py One-time model download / status check
 tests/                     Pytest suite (ML mocked) + opt-in real-model integration test
 data/                      Created at runtime: uploads, processed audio, reports, SQLite DB, logs
 ```
 
-Pipeline: **decode → preprocess → transcribe → diarize → align → analytics → NLP → save**. Analysis runs in
+Pipeline: **probe → decode → VAD → quality → transcribe → diarize → align → analytics → NLP → save**. Analysis runs in
 a background thread, one job at a time to keep memory bounded. Models are cached in memory between runs (this
 can be turned off in Settings).
 
@@ -124,6 +138,23 @@ The pyannote Community-1 model is free but *gated*: you accept its conditions on
 The token is needed only for this download. Afterwards the model loads from the local cache with no network
 access, and you may remove the token. Until diarization is installed, the app still works in **single-speaker
 mode**, which the UI labels clearly.
+
+## Multilingual recordings
+
+- Pick a language on the upload page, or leave **Auto-detect**. The Audio & Language page shows the detected
+  language with Whisper's probabilities.
+- For conversations that switch language (e.g. Telugu ↔ English), turn on **Mixed languages / code-switching**.
+  Each speech region is then transcribed with its own language detection. This is slower, but short turns in a
+  second language are no longer lost.
+- Speech is always transcribed in the language spoken. Nothing is translated.
+- **Use Whisper `medium` for Telugu, Tamil, Hindi and other Indic languages.** In tests on synthetic Telugu speech,
+  `small` produced partly garbled text while `medium` was close to the spoken words. The app shows this advice
+  when relevant.
+- Whisper often writes Telugu/Tamil/Kannada in Devanagari. TalkTime AI converts such lines back to the native
+  script and keeps the original. Hover the "script converted" tag on the timeline to see it.
+- Sentiment, spaCy topics and the decision/action-item rules are English-only. For other languages they are
+  switched off rather than giving unreliable results. Transcription, all audio and speaker analytics, keyword
+  topics and `?`-based questions still work.
 
 ## Model download and sizes
 
@@ -210,7 +241,8 @@ Set `TALKTIME_DATA_DIR` in `.env` to store data elsewhere. Audio is never stored
 |---|---|
 | "Diarization model missing" | Follow *Hugging Face model access*. A 401/403 error means the conditions weren't accepted with the token's account. |
 | "Could not decode audio" | Install FFmpeg, or convert the file to WAV. The file may be corrupted. |
-| Analysis is slow | Use Whisper `base`, lower the beam size, or raise CPU threads in Settings. Measured on a Ryzen 7 5800H with a 50 s, 3-speaker MP3: about 58 s end to end (transcription ~12 s with Whisper `small`, diarization ~43 s). Diarization is the slowest stage on CPU. |
+| Analysis is slow | Use Whisper `base`, lower the beam size, or raise CPU threads in Settings. Measured on a Ryzen 7 5800H with a 50 s, 3-speaker English MP3: about 58 s end to end (transcription ~12 s with `small`, diarization ~43 s on the first run including model load). Code-switching mode and `medium` are slower. A 33 s Telugu/English clip took ~77 s with `small` and ~250 s with `medium`. See the Processing Monitor for your own measurements. |
+| Telugu/Tamil transcript looks wrong | Switch to Whisper `medium` (Settings → Processing), or set the language manually instead of Auto-detect. Lines marked `[unclear]` were flagged as low-confidence or repetitive. |
 | High memory use | Settings → Processing → untick *Keep models in memory*, or use **Release loaded models**. |
 | `pip` fails installing torch | Use Python 3.11/3.12 and the CPU index URL shown above. |
 | Port already in use | `streamlit run app.py --server.port 8502` |
@@ -225,4 +257,12 @@ Set `TALKTIME_DATA_DIR` in `.env` to store data elsewhere. Audio is never stored
 - Question answering, topics, decisions and action items are heuristic and English-focused. Sentiment is
   text-only VADER (English) and does not measure emotion or mental state.
 - CPU processing is not real-time. The actual processing time is measured and shown for every recording.
-- Speakers are not identified across recordings. "Speaker 1" in two calls may be different people.
+- Speakers are not identified across recordings. "Speaker 1" in two calls may be different people. Voice
+  matching across recordings is deliberately not offered, because it would require storing voiceprints (biometric data).
+- Speaker-assignment confidence is alignment-based (how much diarized speech under a line belongs to the assigned
+  speaker). The diarization model provides no per-segment probability, so none is shown.
+- Code-switching works between speech regions (separate turns or sentences). Language switches *within* one
+  sentence share that region's language label. The script-mix table helps spot these.
+- Devanagari → Indic transliteration is a script conversion. It does not fix words Whisper misheard. Languages that
+  share a script (Hindi/Marathi, English/Spanish) cannot be told apart by script.
+- The SNR is an estimate (speech regions also contain noise). Gaps of pure digital silence are clamped at −90 dBFS.
