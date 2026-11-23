@@ -8,7 +8,8 @@ from services.analysis_service import compute_metrics
 from tests.conftest import ROOT, seg, tseg, words_for
 
 PAGES = ["views/dashboard.py", "views/upload_audio.py", "views/speaker_analysis.py", "views/conversation_timeline.py",
-         "views/conversation_intelligence.py", "views/call_comparison.py", "views/reports.py", "views/settings.py"]
+         "views/conversation_intelligence.py", "views/audio_language.py", "views/transcript_search.py",
+         "views/call_comparison.py", "views/reports.py", "views/processing_monitor.py", "views/settings.py"]
 
 
 def _seed(tone_wav, title):
@@ -18,7 +19,20 @@ def _seed(tone_wav, title):
     text = ["Can we review the budget today?", "Yes, I will send the budget report by Friday.", "Great, that sounds good."]
     tr = [tseg(s.start, s.end, t, s.speaker, words=words_for(s.start, s.end, t)) for s, t in zip(diar, text)]
     tr[1].uncertain = True
-    repository.save_analysis(rid, diar, tr, compute_metrics(diar, tr, 6.0, config.AppSettings(), "en"))
+    import soundfile as sf
+
+    from core.audio_quality import analyze_quality
+    from core.vad import detect_speech
+
+    audio, sr = sf.read(tone_wav, dtype="float32")
+    vad = detect_speech(audio, sr, method="energy")
+    quality = analyze_quality(audio, sr, [tuple(x) for x in vad["speech"]], {"sample_rate": 44100, "channels": 2})
+    m = compute_metrics(diar, tr, 6.0, config.AppSettings(), "en", previous={"quality": quality}, vad=vad,
+                        audio=audio, sr=sr, language_probs=[("en", 0.95), ("te", 0.03)])
+    m["processing"] = {"total_seconds": 3.0, "stages": {"decode": 0.1, "transcription": 2.0}, "audio_duration": 6.0,
+                       "realtime_factor": 0.5, "model_load_seconds": {"transcription": 1.0},
+                       "resources": {"available": True, "peak_rss_mb": 800.0, "mean_cpu_percent": 35.0}}
+    repository.save_analysis(rid, diar, tr, m)
     return rid
 
 

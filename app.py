@@ -60,10 +60,13 @@ pages = {
         st.Page("views/speaker_analysis.py", title="Speaker Analysis", icon=":material/record_voice_over:"),
         st.Page("views/conversation_timeline.py", title="Conversation Timeline", icon=":material/view_timeline:"),
         st.Page("views/conversation_intelligence.py", title="Conversation Intelligence", icon=":material/insights:"),
+        st.Page("views/audio_language.py", title="Audio & Language", icon=":material/graphic_eq:"),
+        st.Page("views/transcript_search.py", title="Transcript Search", icon=":material/manage_search:"),
         st.Page("views/call_comparison.py", title="Call Comparison", icon=":material/compare_arrows:"),
     ],
     "Workspace": [
         st.Page("views/reports.py", title="Reports", icon=":material/description:"),
+        st.Page("views/processing_monitor.py", title="Processing Monitor", icon=":material/monitor_heart:"),
         st.Page("views/settings.py", title="Settings", icon=":material/settings:"),
     ],
 }
@@ -74,10 +77,12 @@ st.logo(str(config.ASSETS_DIR / "logo" / "logo.svg"), size="large",
 nav = st.navigation(pages)
 
 with st.sidebar:
+    st.markdown('<span class="tt-badge tt-badge-ok">✓ Local processing only</span>', unsafe_allow_html=True)
+    st.caption("Recordings, transcripts and analytics never leave this computer.")
     ready, missing = readiness(s.whisper_model)
     if ready:
         st.markdown('<span class="tt-badge tt-badge-ok">✓ Offline ready</span>', unsafe_allow_html=True)
-        st.caption("Models cached locally. No data leaves this computer.")
+        st.caption("All required models are cached locally.")
     else:
         st.markdown(f'<span class="tt-badge tt-badge-warn">! Setup incomplete ({missing})</span>', unsafe_allow_html=True)
         st.caption("Some components are missing. See Settings → System status.")
