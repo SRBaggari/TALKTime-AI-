@@ -35,7 +35,24 @@ PATTERNS = {
         r"problem|issue|blocker|main (point|goal|thing)|bottom line|the point is|keep in mind|remember)\b", re.I),
 }
 _DEADLINE = re.compile(r"\b(by |before |on |until )?" + _DAYS + r"\b", re.I)
-_TOKEN = re.compile(r"[A-Za-z][A-Za-z'\-]{2,}")
+
+
+def _tokens(text: str) -> list[str]:
+    """Words in any script. Indic vowel signs / viramas are combining marks (not regex word characters),
+    so letters and marks are grouped explicitly; tokens shorter than 3 chars are dropped."""
+    import unicodedata
+
+    out, cur = [], []
+    for ch in text:
+        if ch.isalpha() or unicodedata.category(ch).startswith("M") or (ch in "'-" and cur):
+            cur.append(ch)
+        else:
+            if cur:
+                out.append("".join(cur).strip("'-"))
+            cur = []
+    if cur:
+        out.append("".join(cur).strip("'-"))
+    return [t for t in out if len(t) >= 3]
 
 
 def _sentences(segments: list[TranscriptSegment]) -> list[dict]:
@@ -74,7 +91,7 @@ def extract_topics(segments: list[TranscriptSegment], top_n: int = 8, language: 
                     add(ent.text, seg, 1.5)
     else:
         for seg in segs:
-            for tok in _TOKEN.findall(seg.text):
+            for tok in _tokens(seg.text):
                 if tok.lower() not in STOPWORDS:
                     add(tok, seg)
 
